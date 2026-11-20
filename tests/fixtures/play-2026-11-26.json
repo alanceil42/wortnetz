@@ -1,0 +1,323 @@
+{
+	"_source": "a solve of this board, played in Chromium through the page (Playwright), recorded from its debug-report game log",
+	"id": "2026-11-26T07-15-00-242Z-g7zg",
+	"puzzle": "bc2f252513c",
+	"date": "2026-11-26",
+	"startedAt": "2026-11-26T07:15:05.989Z",
+	"replay": false,
+	"solved": true,
+	"final": 87147,
+	"active": 107147,
+	"found": 14,
+	"of": 14,
+	"bonus": [
+		"WERKT",
+		"RAKETEN"
+	],
+	"hints": 1,
+	"events": [
+		{
+			"t": 0,
+			"ty": "start"
+		},
+		{
+			"t": 215,
+			"ty": "word",
+			"w": "WERK",
+			"res": "target",
+			"path": [
+				15,
+				10,
+				9,
+				6
+			],
+			"down": 0,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 4956,
+			"ty": "word",
+			"w": "WERKT",
+			"res": "bonus",
+			"path": [
+				15,
+				10,
+				9,
+				6,
+				2
+			],
+			"down": 4683,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 12854,
+			"ty": "word",
+			"w": "TAKE",
+			"res": "invalid",
+			"path": [
+				2,
+				5,
+				6,
+				10
+			],
+			"down": 12654,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 17309,
+			"ty": "word",
+			"w": "WERKTAGS",
+			"res": "target",
+			"path": [
+				15,
+				10,
+				9,
+				6,
+				2,
+				5,
+				0,
+				1
+			],
+			"down": 16841,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 22255,
+			"ty": "word",
+			"w": "WERT",
+			"res": "target",
+			"path": [
+				15,
+				10,
+				9,
+				12
+			],
+			"down": 22056,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 26774,
+			"ty": "word",
+			"w": "RAKETEN",
+			"res": "bonus",
+			"path": [
+				9,
+				5,
+				6,
+				10,
+				13,
+				14,
+				11
+			],
+			"down": 26373,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 31640,
+			"ty": "pause",
+			"why": "clock"
+		},
+		{
+			"t": 31640,
+			"ty": "resume"
+		},
+		{
+			"t": 38606,
+			"ty": "word",
+			"w": "KARO",
+			"res": "target",
+			"path": [
+				6,
+				5,
+				9,
+				4
+			],
+			"down": 38405,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 43182,
+			"ty": "word",
+			"w": "ORKAN",
+			"res": "target",
+			"path": [
+				4,
+				9,
+				6,
+				5,
+				8
+			],
+			"down": 42915,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 49888,
+			"ty": "word",
+			"w": "KRAN",
+			"res": "target",
+			"path": [
+				6,
+				9,
+				5,
+				8
+			],
+			"down": 49687,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 58133,
+			"ty": "word",
+			"w": "RAKETE",
+			"res": "target",
+			"path": [
+				9,
+				5,
+				6,
+				10,
+				13,
+				14
+			],
+			"down": 57800,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 63364,
+			"ty": "word",
+			"w": "TRETEN",
+			"res": "target",
+			"path": [
+				12,
+				9,
+				10,
+				13,
+				14,
+				11
+			],
+			"down": 63029,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 67820,
+			"ty": "word",
+			"w": "ANTRETEN",
+			"res": "target",
+			"path": [
+				5,
+				8,
+				12,
+				9,
+				10,
+				13,
+				14,
+				11
+			],
+			"down": 67350,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 75588,
+			"ty": "word",
+			"w": "HERAN",
+			"res": "target",
+			"path": [
+				7,
+				10,
+				9,
+				5,
+				8
+			],
+			"down": 75319,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 80429,
+			"ty": "hint",
+			"w": "THEKE",
+			"k": 1
+		},
+		{
+			"t": 86323,
+			"ty": "word",
+			"w": "HEKTAR",
+			"res": "target",
+			"path": [
+				7,
+				10,
+				6,
+				2,
+				5,
+				9
+			],
+			"down": 85988,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 92596,
+			"ty": "word",
+			"w": "THEKE",
+			"res": "target",
+			"path": [
+				2,
+				7,
+				10,
+				6,
+				3
+			],
+			"down": 92329,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 99596,
+			"ty": "word",
+			"w": "TRAKT",
+			"res": "target",
+			"path": [
+				12,
+				9,
+				5,
+				6,
+				2
+			],
+			"down": 99328,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 107147,
+			"ty": "word",
+			"w": "SKAT",
+			"res": "target",
+			"path": [
+				1,
+				6,
+				5,
+				2
+			],
+			"down": 106944,
+			"backs": 0,
+			"tap": false
+		},
+		{
+			"t": 107147,
+			"ty": "solve",
+			"ms": 87147,
+			"active": 107147,
+			"replay": false
+		}
+	]
+}

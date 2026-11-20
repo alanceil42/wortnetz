@@ -1,0 +1,10 @@
+# Bonus words the lexicon misses: real words (a Duden headword is enough for a bonus word),
+# never targets. One per line, # comments. Found in played games:
+BRIE
+DART
+LEIN
+REISER
+# rarer, also Duden headwords
+KRAL
+LEIS
+LEICH

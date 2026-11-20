@@ -1,0 +1,42 @@
+wortnetz
+Copyright 2026 alanceil42 and contributors
+Licensed under the GNU General Public License, version 3 only (LICENSE).
+
+wortnetz is a German version of Zanagrams, an English word game by PZL games
+(https://pzlgames.com/games/zanagrams/). It is not connected to PZL games.
+
+
+The puzzles (puzzles/*.json) and the word lists in gen/ were made with these word data. Their
+words, word frequencies (the "z" values) and word forms come from them:
+
+wordfreq
+    Robyn Speer and contributors, https://github.com/rspeer/wordfreq
+    Its word lists are licensed under the Creative Commons Attribution-ShareAlike 4.0
+    International licence (CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/);
+    its sources and their credits are listed in wordfreq's README. wortnetz uses the German
+    and English frequencies.
+
+igerman98, German dictionary for Hunspell
+    Copyright (C) 1999-2016 Björn Jacke, https://www.j3e.de/ispell/igerman98/
+    Licensed under the GNU General Public License, version 2 or 3. Used as packaged by
+    dictionary-de 3.0.0 (Titus Wormer, https://github.com/wooorm/dictionaries).
+
+Wiktionary, German nouns
+    Wiktionary contributors, https://de.wiktionary.org/
+    Licensed under CC BY-SA 4.0. Used as the noun table of the Python package german-nouns
+    1.2.5 (https://github.com/gambolputty/german-nouns), which tells singular nouns from
+    plurals for the generator.
+
+The word data themselves are not in this repository; gen/lexicon.py and gen/nouns.py build
+what the generator reads from them.
+
+
+Shipped with the page:
+
+Lucide icons (the sprite in index.html)
+    https://lucide.dev, lucide-static 1.75.0
+    ISC License. Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part
+    of Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributors 2022.
+
+xxl-scorer (vendor/xxl-scorer/: the debug report, backup file names, the Impressum link)
+    https://github.com/alanceil42/xxl-scorer, MIT License, vendor/xxl-scorer/LICENSE

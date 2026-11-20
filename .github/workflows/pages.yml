@@ -1,0 +1,96 @@
+# Publishes the site to GitHub Pages for every published release (not for pre-releases).
+# Only the files a browser loads go up. The site's own settings come from the repository
+# variable SITE_CONFIG (the JSON of local/config.json: the Impressum link); without it the
+# shipped defaults apply. To publish a release again, e.g. after changing SITE_CONFIG:
+# Actions → Pages → Run workflow, and pick its tag under "Use workflow from". There is no
+# input naming what to publish: the run's own tag is what the github-pages environment checks
+# against its deployment rules, so only that may be published, and only when it is on main.
+# Actions are pinned by commit; Dependabot (.github/dependabot.yml) proposes new ones.
+name: Pages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0  # main's history, for the check below
+          persist-credentials: false
+      - name: A release tag, on main
+        run: |
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::Run this from a release tag (Use workflow from → Tags), not from $GITHUB_REF_NAME."
+            exit 1
+          fi
+          # Spelled out in full: a tag named "origin/main" would win over the remote branch.
+          # On main's first-parent line, i.e. a state main was in: every commit of a merged pull
+          # request is an ancestor of main, but only the merge was reviewed as a whole.
+          head="$(git rev-parse HEAD)"
+          # (grep reads it all: with -q it would stop early, and pipefail would count rev-list's
+          # broken pipe as a failure)
+          if ! git rev-list --first-parent refs/remotes/origin/main | grep -x "$head" > /dev/null; then
+            echo "::error::$GITHUB_REF_NAME ($(git rev-parse --short HEAD)) is not on main; only releases of main are published."
+            exit 1
+          fi
+      - name: Vendored files match SHA256SUMS
+        run: bash tools/vendor.sh --check
+      - name: Assemble the site
+        env:
+          SITE_CONFIG: ${{ vars.SITE_CONFIG }}
+        run: |
+          site="$RUNNER_TEMP/site"
+          mkdir -p "$site"
+          # git archive rather than a copy: it fills in the commit and date of src/build.js and
+          # the commit of sw.js (.gitattributes): the page's foot names the release, and every
+          # release is a new service worker with its own cache. Spelled out in full, as above.
+          git archive -o "$RUNNER_TEMP/site.tar" "refs/tags/$GITHUB_REF_NAME" \
+            index.html app.css icon.svg manifest.json config.json sw.js icons src vendor puzzles
+          tar -x -f "$RUNNER_TEMP/site.tar" -C "$site"
+          version="$(sed -n "s/^export const VERSION = '\([^']*\)';$/\1/p" "$site/src/build.js")"
+          echo "src/build.js: VERSION $version; $(grep -s '^const RAW' "$site/src/build.js" || true)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::src/build.js says $version, the tag is $GITHUB_REF_NAME: the page would name another version."
+            exit 1
+          fi
+          if grep -q 'Format:' "$site/src/build.js" "$site/sw.js"; then
+            echo "::error::git archive didn't fill in src/build.js or sw.js (.gitattributes): no commit in the foot, no new cache."
+            exit 1
+          fi
+          # The upload replaces a symbolic link by what it points to, which could be any file of
+          # the runner: only regular files and directories go up.
+          odd="$(find "$site" ! -type f ! -type d)"
+          if [ -n "$odd" ]; then
+            echo "::error::Not a regular file or directory: $odd"
+            exit 1
+          fi
+          if [ -n "$SITE_CONFIG" ]; then
+            mkdir -p "$site/local"
+            printf '%s' "$SITE_CONFIG" | jq . > "$site/local/config.json"
+            echo "local/config.json from SITE_CONFIG: $(jq -c 'keys' "$site/local/config.json")"
+          fi
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

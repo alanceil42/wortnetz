@@ -1,0 +1,57 @@
+# Public tests and a smoke test of the page in Chrome on every push and pull request. Nothing is
+# published or changed. Actions are pinned by commit; Dependabot (.github/dependabot.yml)
+# proposes new ones. The puzzles are never made here: the generator needs word data that isn't
+# in the repository.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+      - name: Vendored files match SHA256SUMS
+        run: bash tools/vendor.sh --check
+      # The node tests with a coverage report of src/. It fails when coverage falls below these
+      # thresholds, set 1-2 points under the numbers measured when they were set: coverage
+      # shifts a little between Node versions. Raise them when tests are added. src/ui/ runs
+      # only in a page, so no test loads it and it is not in the report.
+      - name: Tests, with coverage
+        run: >-
+          node --test --experimental-test-coverage --test-coverage-include='src/**'
+          --test-coverage-lines=98 --test-coverage-branches=88 --test-coverage-functions=96
+          tests/*.test.js
+      - name: The generator's Python compiles
+        run: python3 -m py_compile gen/*.py
+
+  # The page in a real browser (tests/browser/smoke.js): fails on CSP violations, console
+  # errors and requests anywhere but the site. playwright-core drives the runner's own Chrome;
+  # it downloads no browser and isn't saved to package.json. Its version is pinned here and
+  # updated by hand (Dependabot doesn't see it).
+  smoke:
+    runs-on: ubuntu-latest
+    # about a minute normally; a browser that hangs shouldn't hold the runner for six hours
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+      - name: playwright-core, pinned, not saved, without install scripts
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund playwright-core@1.64.1
+      - name: Smoke test in Chrome
+        run: node --test tests/browser/smoke.js

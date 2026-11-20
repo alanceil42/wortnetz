@@ -1,0 +1,6 @@
+# git archive fills in the commit and date of src/build.js (what runs names its version)
+src/build.js export-subst
+# and the commit in sw.js: every release is a new service worker with its own cache
+sw.js export-subst
+# the puzzles are made by gen/gen.py: GitHub folds their diffs (and keeps their words out of view)
+puzzles/*.json linguist-generated=true
