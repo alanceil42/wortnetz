@@ -45,8 +45,20 @@ const WORD = /^[A-ZÄÖÜ]{1,16}$/;
 // a board's id as the generator makes it ("b" and 10 hex digits), or the first run's example
 const ID = /^(?:b[0-9a-f]{10}|example)$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-/** a moment as stored: an ISO time of at most 40 characters that Date.parse reads */
-const when = v => (typeof v === 'string' && v.length <= 40 && !Number.isNaN(Date.parse(v)) ? v : undefined);
+const TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+/**
+ * A moment as the page writes it (Date's toISOString: "2026-11-19T07:12:08.712Z") and nothing
+ * else: browsers differ in what else Date.parse reads, and the strings must order as times.
+ * The round trip turns away dates that don't exist ("2026-02-30...").
+ */
+export function isTime(v) {
+	if (typeof v !== 'string' || !TIME.test(v)) return false;
+	const t = Date.parse(v);
+	return !Number.isNaN(t) && new Date(t).toISOString() === v;
+}
+const when = v => (isTime(v) ? v : undefined);
+/** a before b, as times */
+const earlier = (a, b) => Date.parse(a) < Date.parse(b);
 /** the first ENTRIES_MAX [key, value] pairs of a plain object whose key is a puzzle id */
 const idEntries = o => Object.entries(o).filter(([k]) => ID.test(k)).slice(0, ENTRIES_MAX);
 
@@ -113,7 +125,7 @@ export function needsIntro(st) {
 }
 
 /** solves, oldest first */
-export const solvesInOrder = st => Object.values(st.solves).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+export const solvesInOrder = st => Object.values(st.solves).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
 /** the factor of the expected times now: from the first solves' ratios, the newest 10 */
 export const factorNow = st => factorOf(solvesInOrder(st).map(s => s.ratio));
@@ -196,11 +208,11 @@ export function mergeBackup(st, b) {
 	for (const s of b.solves) {
 		const have = st.solves[s.puzzle];
 		if (!have) { st.solves[s.puzzle] = s; added++; delete st.current[s.puzzle]; }
-		else if (s.at < have.at) { st.solves[s.puzzle] = s; replaced++; }
+		else if (earlier(s.at, have.at)) { st.solves[s.puzzle] = s; replaced++; }
 		else kept++;
 		st.inFile[s.puzzle] = true;
 	}
-	for (const [k, v] of Object.entries(b.started)) if (!st.started[k] || v < st.started[k]) st.started[k] = v;
+	for (const [k, v] of Object.entries(b.started)) if (!st.started[k] || earlier(v, st.started[k])) st.started[k] = v;
 	st.settings = cleanSettings(b.settings);
 	return { added, replaced, kept };
 }

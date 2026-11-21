@@ -8,6 +8,21 @@ that are not released yet collect under "Unreleased".
 ## Unreleased
 
 
+## 0.2.1 - 2026-11-21
+
+Fixes only.
+
+- A started puzzle that can't be read back from the browser's storage no longer keeps that
+  day's board shut: whatever still fits is kept, otherwise the board opens afresh
+- When the browser refuses to save (its storage full or locked), a message says so once:
+  "Nicht gespeichert: …", with the way to keep the solves in a backup file
+- A new Impressum link on the site reaches installed copies from their next start, without a
+  new release
+- Times in storage and in backup files count only in the form wortnetz writes them, and the
+  first solve of a puzzle is found by time: a file can no longer replace a real solve with a
+  made-up time
+
+
 ## 0.2 - 2026-11-21
 
 The first public release: a puzzle a day until 25 November 2027.

@@ -24,6 +24,8 @@ const LOCAL = { '/local/config.json': JSON.stringify({ imprintUrl: IMPRINT }) };
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png' };
 
 let server, base, browser;
+// a release's worker, as git archive makes it, when set: the commit filled in (else "dev")
+let stamp = null;
 
 before(async () => {
 	server = createServer(async (req, res) => {
@@ -33,7 +35,9 @@ before(async () => {
 			const path = url.slice('/wortnetz'.length);
 			const file = normalize(join(root, path === '/' ? 'index.html' : path));
 			if (!file.startsWith(root + sep) || path.split('/').some(p => p.startsWith('.'))) throw new Error('outside');
-			const body = LOCAL[path] ?? await readFile(file);
+			if (path in LOCAL && LOCAL[path] === null) throw new Error('gone');
+			let body = LOCAL[path] ?? await readFile(file);
+			if (stamp && path === '/sw.js') body = body.toString().replace('$Format:%h$', stamp);
 			res.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
 			res.end(body);
 		} catch {
@@ -116,4 +120,59 @@ test("inside another site's frame: no game, no worker, a link to open it on its 
 	assert.deepEqual(requests.filter(u => /puzzles|config\.json|sw\.js/.test(u)), [], 'nothing loaded for a game');
 	assert.deepEqual(problems, []);
 	await ctx.close();
+});
+
+test("a release's worker: the Impressum link changed on the site reaches an installed page from the next start; offline the cached one", async () => {
+	stamp = 'abc1234';
+	const link = url => JSON.stringify({ imprintUrl: url });
+	const A = 'https://example.org/a/', B = 'https://example.org/b/';
+	LOCAL['/local/config.json'] = link(A);
+	const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+	const page = await ctx.newPage();
+	const problems = [];
+	page.on('console', m => { if (m.type() === 'error') problems.push(`console: ${m.text()}`); });
+	page.on('pageerror', e => problems.push(`page: ${e.message}`));
+	await page.clock.install({ time: new Date('2026-11-26T10:00:00+01:00') });
+	const href = () => page.locator('#foot a').getAttribute('href', { timeout: 2000 }).catch(() => null);
+	/** a start: the page reloaded, the foot drawn */
+	const start = async () => {
+		await page.reload();
+		await page.waitForFunction(() => window.__wortnetz && window.__wortnetz.view() && document.getElementById('foot').textContent, null, { timeout: 10000 });
+	};
+	/** what the worker's cache holds for the site's settings, once its refresh is done */
+	const cached = want => page.waitForFunction(async want => {
+		const k = (await caches.keys()).find(n => n === 'wortnetz-abc1234');
+		const r = k && await (await caches.open(k)).match('local/config.json');
+		return (r ? (await r.json()).imprintUrl : null) === want;
+	}, want, { timeout: 10000 });
+
+	await page.goto(base);
+	await page.waitForFunction(() => navigator.serviceWorker.controller, null, { timeout: 15000 });
+	await cached(A);
+	await start();
+	assert.equal(await href(), A, 'installed: the link as the site had it');
+
+	LOCAL['/local/config.json'] = link(B);
+	await start();
+	assert.equal(await href(), A, 'the first start after the change: from the cache, no waiting');
+	await cached(B);
+	await start();
+	assert.equal(await href(), B, 'the next start: the new link');
+
+	await ctx.setOffline(true);
+	await start();
+	assert.equal(await href(), B, 'offline: the cached link');
+	await ctx.setOffline(false);
+
+	assert.deepEqual(problems, []);
+	LOCAL['/local/config.json'] = null;
+	await start();
+	await cached(null);
+	await start();
+	assert.equal(await href(), null, 'removed on the site: gone from the next start');
+	// the page's request for the settings now ends in a 404, as on a site without them
+	assert.deepEqual(problems.filter(m => !/status of 404/.test(m)), []);
+	await ctx.close();
+	stamp = null;
+	LOCAL['/local/config.json'] = JSON.stringify({ imprintUrl: IMPRINT });
 });

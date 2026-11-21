@@ -48,7 +48,7 @@ test('stats: played, solved, the on-time dates for the streak', () => {
 
 test('backup: export, then import into an empty browser: same archive, stats, factor and settings', () => {
 	const st = playedState();
-	const file = JSON.stringify(rec.backupJson(st, new Date('2026-11-22T09:00:00Z')));
+	const file = JSON.stringify(rec.backupJson(st, new Date('2026-11-22T09:00:00.000Z')));
 	const b = rec.readBackup(file);
 	assert.ok(b.ok);
 	const fresh = rec.emptyState();
@@ -80,7 +80,7 @@ test('backup: a merge keeps the first solve of each puzzle', () => {
 test('backup: the dot shows solves in no file; an export clears it', () => {
 	const st = playedState();
 	assert.equal(rec.unsaved(st).length, 3);
-	rec.markExported(st, new Date('2026-11-22T10:00:00Z'));
+	rec.markExported(st, new Date('2026-11-22T10:00:00.000Z'));
 	assert.deepEqual(rec.unsaved(st), []);
 	assert.equal(st.lastExport, '2026-11-22T10:00:00.000Z');
 	rec.addSolve(st, solveOf(P(id(7), '2026-11-23'), { at: '2026-11-23T08:00:00.000Z' }));
@@ -92,8 +92,8 @@ test('backup: a file anyone could have edited: wrong kind, junk fields and bad w
 	assert.equal(rec.readBackup('{"kind":"xxl-backup"}').ok, false);
 	assert.equal(rec.readBackup('{"kind":"wortnetz-backup","v":99}').ok, false);
 	const b = rec.readBackup(JSON.stringify({ kind: 'wortnetz-backup', v: 1, solves: [
-		{ puzzle: id(1), at: '2026-11-19T08:00:00Z', ms: 1000, found: ['HASE', '<img>', 'x'.repeat(30)], foundAt: { HASE: 5, '<img>': 3 }, evil: 'drop me', ratio: 1e9 },
-		{ puzzle: '../../etc', at: '2026-11-19T08:00:00Z', ms: 1 },
+		{ puzzle: id(1), at: '2026-11-19T08:00:00.000Z', ms: 1000, found: ['HASE', '<img>', 'x'.repeat(30)], foundAt: { HASE: 5, '<img>': 3 }, evil: 'drop me', ratio: 1e9 },
+		{ puzzle: '../../etc', at: '2026-11-19T08:00:00.000Z', ms: 1 },
 		{ puzzle: 'nodate', at: 'yesterday', ms: 1 },
 		'junk',
 	], settings: { hideTime: 'yes', fileName: 'x'.repeat(500), other: 1 } }));
@@ -108,7 +108,7 @@ test('backup: a file anyone could have edited: wrong kind, junk fields and bad w
 
 test('state read back from storage survives junk', () => {
 	assert.deepEqual(JSON.stringify(rec.cleanState('garbage')), JSON.stringify(rec.emptyState()));
-	const st = rec.cleanState({ solves: { [id(1)]: { puzzle: id(2), at: '2026-11-19T08:00:00Z', ms: 1 } }, games: [1, {}, null], settings: null });
+	const st = rec.cleanState({ solves: { [id(1)]: { puzzle: id(2), at: '2026-11-19T08:00:00.000Z', ms: 1 } }, games: [1, {}, null], settings: null });
 	assert.deepEqual({ ...st.solves }, {}, 'a solve filed under another id is dropped');
 	assert.equal(st.games.length, 1);
 });
@@ -153,7 +153,7 @@ test('the first run shows on fresh storage only', () => {
 	const played = playedState();
 	assert.equal(played.intro, null);
 	assert.equal(rec.needsIntro(played), false, '0.1 played here: no first run');
-	const started = rec.emptyState(); started.started[id(1)] = '2026-11-19T07:00:00Z';
+	const started = rec.emptyState(); started.started[id(1)] = '2026-11-19T07:00:00.000Z';
 	assert.equal(rec.needsIntro(started), false);
 	assert.equal(rec.backupJson(st).intro, undefined, 'not part of a backup');
 });
@@ -167,7 +167,7 @@ test('settings: vibration on and details shut unless stored otherwise', () => {
 const PROTO = ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf', 'isPrototypeOf'];
 
 test('ids: only board ids and the example; prototype names never become keys', () => {
-	const at = '2026-11-19T08:00:00Z';
+	const at = '2026-11-19T08:00:00.000Z';
 	const solves = Object.fromEntries([...PROTO, '../../etc', 'a1-500', 'B0000000001', id(1)].map(k => [k, { puzzle: k, at, ms: 1 }]));
 	// JSON.parse makes "__proto__" an own key, as a file or storage would bring it
 	const text = `{"solves":${JSON.stringify(solves).replace('{', '{"__proto__":{"puzzle":"__proto__","at":"x","ms":1},')},`
@@ -199,28 +199,20 @@ test('ids: only board ids and the example; prototype names never become keys', (
 	assert.deepEqual(Object.keys(back.solves), [id(1)]);
 });
 
-test('backup limits: file size, entries, the length of a date', () => {
+test('backup limits: file size, entries', () => {
 	const head = '{"kind":"wortnetz-backup","v":1,';
 	assert.deepEqual(rec.readBackup(' '.repeat(rec.BACKUP_MAX_BYTES + 1)), { ok: false, error: rec.BACKUP_TOO_BIG });
 	assert.equal(rec.readBackup(null).ok, false);
-	const many = n => Array.from({ length: n }, (_, k) => ({ puzzle: id(k), at: '2026-11-19T08:00:00Z', ms: 1 }));
+	const many = n => Array.from({ length: n }, (_, k) => ({ puzzle: id(k), at: '2026-11-19T08:00:00.000Z', ms: 1 }));
 	assert.deepEqual(rec.readBackup(`${head}"solves":${JSON.stringify(many(rec.ENTRIES_MAX + 1))}}`), { ok: false, error: rec.BACKUP_TOO_BIG });
-	const starts = n => Object.fromEntries(Array.from({ length: n }, (_, k) => [id(k), '2026-11-19T08:00:00Z']));
+	const starts = n => Object.fromEntries(Array.from({ length: n }, (_, k) => [id(k), '2026-11-19T08:00:00.000Z']));
 	assert.equal(rec.readBackup(`${head}"started":${JSON.stringify(starts(rec.ENTRIES_MAX + 1))}}`).ok, false);
 	const full = rec.readBackup(`${head}"solves":${JSON.stringify(many(rec.ENTRIES_MAX))},"started":${JSON.stringify(starts(rec.ENTRIES_MAX))}}`);
 	assert.ok(full.ok);
 	assert.equal(full.solves.length, rec.ENTRIES_MAX);
-	// V8 reads "2026-11-19 (and then two megabytes)" as a date: a date is 40 characters at most
-	const long = `2026-11-19 (${'x'.repeat(100)})`;
-	assert.ok(!Number.isNaN(Date.parse(long)));
-	const b = rec.readBackup(`${head}"solves":[{"puzzle":"${id(1)}","at":"${long}","ms":1}],"started":{"${id(2)}":"${long}","${id(3)}":"2026-11-19T08:00:00Z"}}`);
-	assert.deepEqual(b.solves, []);
-	assert.deepEqual(Object.keys(b.started), [id(3)]);
 	// storage read back: the same limits
-	const st = rec.cleanState({ started: { ...starts(rec.ENTRIES_MAX + 10), [id(99999)]: long }, lastExport: long, intro: long });
+	const st = rec.cleanState({ started: starts(rec.ENTRIES_MAX + 10) });
 	assert.equal(Object.keys(st.started).length, rec.ENTRIES_MAX);
-	assert.equal(st.lastExport, null);
-	assert.equal(st.intro, null);
 	// a real year of daily play stays far below the file limit
 	const year = JSON.stringify(rec.backupJson((() => {
 		const y = rec.emptyState();
@@ -228,4 +220,38 @@ test('backup limits: file size, entries, the length of a date', () => {
 		return y;
 	})()), null, '\t');
 	assert.ok(year.length * 8 < rec.BACKUP_MAX_BYTES, `a year: ${year.length} bytes`);
+});
+
+test("times: only the page's own form, as toISOString writes it; ordered as times", () => {
+	assert.ok(rec.isTime(new Date('2026-11-19T07:12:08.712Z').toISOString()));
+	assert.ok(rec.isTime('2026-11-19T07:12:08.712Z'));
+	// V8 reads "2026-11-19 (and then two megabytes)" as a date; Safari reads less: neither counts
+	const long = `2026-11-19 (${'x'.repeat(100)})`;
+	assert.ok(!Number.isNaN(Date.parse(long)));
+	const odd = ['1', '2026-11-19', '2026-11-19T07:12:08Z', '2026-11-19T07:12:08.7Z', '2026-11-19T08:12:08.712+01:00',
+		'2026-02-30T00:00:00.000Z', '2026-11-19T24:00:00.000Z', ' 2026-11-19T07:12:08.712Z', long, 1763536328712, null, {}];
+	for (const v of odd) assert.ok(!rec.isTime(v), String(v));
+	// a backup file: a solve or a start with such a time brings nothing
+	const head = '{"kind":"wortnetz-backup","v":1,';
+	const solve = (k, at) => ({ puzzle: id(k), at, ms: 1000 });
+	const b = rec.readBackup(`${head}"solves":${JSON.stringify(odd.map((v, k) => solve(k, v)).concat(solve(99, '2026-11-19T07:12:08.712Z')))},` +
+		`"started":${JSON.stringify(Object.fromEntries(odd.map((v, k) => [id(k), v]).concat([[id(99), '2026-11-19T07:00:00.000Z']])))}}`);
+	assert.deepEqual(b.solves.map(x => x.puzzle), [id(99)]);
+	assert.deepEqual(Object.keys(b.started), [id(99)]);
+	// storage read back: the same
+	const st = rec.cleanState({ solves: Object.fromEntries(odd.map((v, k) => [id(k), solve(k, v)])), started: Object.fromEntries(odd.map((v, k) => [id(k), v])), lastExport: '1', intro: long });
+	assert.deepEqual([Object.keys(st.solves).length, Object.keys(st.started).length, st.lastExport, st.intro], [0, 0, null, null]);
+	// "first solve wins" by time: a file's "1" no longer replaces a real solve (it is no time)
+	const mine = playedState();
+	const real = mine.solves[id(0)];
+	const r = rec.mergeBackup(mine, rec.readBackup(`${head}"solves":[${JSON.stringify({ ...real, at: '1' })}]}`));
+	assert.deepEqual(r, { added: 0, replaced: 0, kept: 0 });
+	assert.equal(mine.solves[id(0)].at, real.at);
+	// an earlier solve in a file still wins, a later one doesn't
+	const earlier = { ...real, at: '2026-11-19T07:59:59.999Z', ms: 1234 };
+	const later = { ...mine.solves[id(1)], at: '2026-11-20T23:00:00.000Z', ms: 4321 };
+	assert.deepEqual(rec.mergeBackup(mine, rec.readBackup(`${head}"solves":${JSON.stringify([earlier, later])}}`)), { added: 0, replaced: 1, kept: 1 });
+	assert.equal(mine.solves[id(0)].ms, 1234);
+	assert.notEqual(mine.solves[id(1)].ms, 4321);
+	assert.deepEqual(rec.solvesInOrder(mine).map(x => x.puzzle), [id(0), id(1), id(2)]);
 });
