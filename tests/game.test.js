@@ -192,3 +192,47 @@ test('snapshot and restore: a game resumes paused after a reload, with its words
 	assert.ok(g.resume(H, 100));
 	assert.equal(g.activeMs(H, 1100), 8000);
 });
+
+test('restore: a real game, stopped halfway, comes back field by field, paused', () => {
+	// the recorded solve up to its fourth word: start, words, a pause, a hint as they happened
+	const evs = PLAY.events;
+	const cut = evs.findIndex((e, k) => e.ty === 'word' && evs.slice(0, k + 1).filter(x => x.ty === 'word').length === 4) + 1;
+	const G = replay(DAY, evs.slice(0, cut));
+	assert.ok(!G.solved && G.found.length > 0);
+	const snap = JSON.parse(JSON.stringify(g.snapshot(G, G.events.at(-1).t + 500)));
+	const H = g.restore(snap, DAY);
+	for (const k of ['id', 'puzzle', 'date', 'startedAt', 'run', 'bonusMs', 'found', 'foundAt', 'bonus', 'tries', 'hints', 'hintW', 'hintK', 'solved', 'final', 'active', 'replay']) {
+		assert.deepEqual(H[k], snap[k] ?? G[k], k);
+	}
+	assert.deepEqual(H.events.slice(0, -1), snap.events);
+	assert.deepEqual(H.events.at(-1), { t: snap.run, ty: 'pause', why: 'reload' });
+	assert.equal(H.pausedBy, 'reload');
+});
+
+test("restore: whatever storage holds, the game is sound or there is none (never a throw)", () => {
+	const t = Object.keys(DAY.targets), at = '2026-11-26T09:00:00.000Z';
+	const r = snap => g.restore(snap, DAY);
+	// no game that can go on
+	for (const bad of [null, 5, 'x', [], {}, { events: 5 }, { startedAt: '1' }, { startedAt: '2026-11-26' },
+		{ startedAt: at, solved: true }, { startedAt: at, found: t }]) assert.equal(r(bad), null, JSON.stringify(bad));
+	// a game whose fields hold junk: only what fits this board stays
+	const H = r({ startedAt: at, events: 5, found: [t[0], t[0], 'NICHTDA', 7, '__proto__'], foundAt: { [t[0]]: 900, NICHTDA: 1, constructor: 2 },
+		bonus: ['WERKT', 'WERKT', 'QUATSCH'], bonusMs: 1e9, hints: 9, hintW: 'NICHTDA', hintK: 3, tries: -1, run: 'x', pausedBy: { a: 1 }, id: {}, replay: 'ja', p: null, bonusSet: 5 });
+	assert.deepEqual(H.found, [t[0]]);
+	assert.deepEqual(Object.keys(H.foundAt), [t[0]]);
+	assert.deepEqual(H.bonus, ['WERKT']);
+	assert.equal(H.bonusMs, g.BONUS_MS);
+	assert.deepEqual([H.hints, H.hintW, H.hintK, H.tries, H.run, H.id, H.replay], [0, null, 0, 0, 0, '', false]);
+	assert.deepEqual(H.events, [{ t: 0, ty: 'pause', why: 'reload' }]);
+	assert.equal(H.p, DAY);
+	assert.ok(H.bonusSet.has('WERKT'));
+	assert.equal(Object.getPrototypeOf(H.foundAt), Object.prototype);
+	// and it plays on
+	const vis = g.visible(H);
+	assert.ok(vis.nodes.size > 0);
+	assert.ok(g.resume(H, 10));
+	assert.ok(g.hint(H, 20) === null, 'no hints left');
+	// a hinted target in range stays
+	const K = r({ startedAt: at, hints: 2, hintW: t[1], hintK: 1 });
+	assert.deepEqual([K.hints, K.hintW, K.hintK], [2, t[1], 1]);
+});

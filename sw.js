@@ -84,19 +84,35 @@ self.addEventListener('fetch', e => {
 	if (req.method !== 'GET') return;
 	const url = new URL(req.url);
 	if (url.origin !== location.origin || !url.href.startsWith(self.registration.scope)) return;
-	e.respondWith(answer(req, url));
+	e.respondWith(answer(req, url, e));
 });
 
-async function answer(req, url) {
+async function answer(req, url, e) {
 	const cache = await caches.open(CACHE);
 	// a navigation within the scope is the page itself
 	const key = req.mode === 'navigate' ? 'index.html' : url.href.slice(self.registration.scope.length).split('?')[0] || './';
 	if (RELEASE === 'dev') {
 		try { return await fetch(req); } catch { return (await cache.match(key)) || Response.error(); }
 	}
+	if (OPTIONAL.includes(key)) return optional(cache, key, e);
 	const hit = await cache.match(key);
 	if (hit) return hit;
-	// the site's optional settings weren't there when this release was installed: still not
-	if (OPTIONAL.includes(key)) return new Response('', { status: 404 });
 	return fetch(req);
+}
+
+/**
+ * The site's own settings (the Impressum link) can change without a release (the Pages workflow
+ * run again): answered from the cache at once, never waiting for the network, and fetched anew
+ * behind it for the next start. Gone on the server (404) means gone here too.
+ */
+async function optional(cache, key, e) {
+	const hit = await cache.match(key);
+	const update = fresh(key).then(async r => {
+		if (r.ok) await cache.put(key, r.clone());
+		else if (r.status === 404) await cache.delete(key);
+		return r;
+	}).catch(() => null);
+	if (hit) { e.waitUntil(update); return hit; }
+	const r = await update;
+	return r && r.ok ? r : new Response('', { status: 404 });
 }

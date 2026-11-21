@@ -4,7 +4,7 @@
 //
 //	node tools/ui-check.mjs
 //	SHOTS=/tmp/ui         screenshots there
-//	ONLY=looks,play,...   some parts only (looks, play, intro, runout, offline, dates)
+//	ONLY=looks,play,...   some parts only (looks, play, intro, runout, storage, offline, dates)
 //	BACKUP=/path.json     also import a real backup and compare; BACKUP_DAY=date
 //
 // Each check prints ok or FAIL; the exit code is the number of failures.
@@ -15,6 +15,7 @@ import { join, extname, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as rec from '../src/core/records.js';
 import { dayMap, streak, addDays } from '../src/core/days.js';
+import { VERSION } from '../src/build.js';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 const SHOTS = process.env.SHOTS || '/tmp/ui';
@@ -85,7 +86,7 @@ async function open(o = {}) {
 	if (process.env.LOGS) page.on('console', m => console.log('  console:', m.text()));
 	await page.clock.install({ time: o.time || at(TODAY) });
 	// a seeded state comes with this checkout's release, so no "Neue Version geladen." covers the shots
-	if (o.state) await page.addInitScript(s => { if (!localStorage.getItem('wortnetz.state')) { localStorage.setItem('wortnetz.state', s); localStorage.setItem('wortnetz.release', '0.2 dev'); } }, o.state);
+	if (o.state) await page.addInitScript(([s, v]) => { if (!localStorage.getItem('wortnetz.state')) { localStorage.setItem('wortnetz.state', s); localStorage.setItem('wortnetz.release', `${v} dev`); } }, [o.state, VERSION]);
 	// a vibration log: what the haptics module sent (navigator.vibrate exists on Chromium)
 	await page.addInitScript(() => { window.__vib = []; if (navigator.vibrate) navigator.vibrate = p => { window.__vib.push(p); return true; }; });
 	// the root font as iOS would set it (before the page's script runs: readyState "interactive")
@@ -328,7 +329,7 @@ if (part('play')) {
 	check(st.date === '2026-11-26' && (await txt(page, '#day')).includes('Archiv'), 'play: an archive day opens');
 	// help: the version, the inspiration
 	await page.click('.hdr [data-open="help"]');
-	check((await txt(page, '.ver')).startsWith('wortnetz 0.2') && await vis(page, '[data-act="example"]'), 'help: the version, "Probierrätsel noch einmal"');
+	check((await txt(page, '.ver')).startsWith(`wortnetz ${VERSION}`) && await vis(page, '[data-act="example"]'), 'help: the version, "Probierrätsel noch einmal"');
 	const credit = await page.evaluate(() => { const a = document.querySelector('.sheet a[href^="https://pzlgames.com/"]'); return a && { t: a.closest('p').textContent, rel: a.rel }; });
 	check(credit && credit.t.includes('Zanagrams') && credit.rel.includes('noreferrer'), 'help: names Zanagrams by PZL games, linked without a referrer', credit && credit.t);
 	await page.click('[data-close]');
@@ -363,7 +364,7 @@ if (part('play')) {
 	const rep = JSON.parse(readFileSync(reportFile, 'utf8'));
 	check(rep.app === 'wortnetz' && rep.kind === 'debug-report' && dr.suggestedFilename() === 'wortnetz-debug-2026-11-27.json', 'report: saved as wortnetz-debug-<date>.json');
 	check(rep.games.length >= 3 && rep.rejected.length === 1 && rep.rejected[0].w === nnWord && !('claims' in rep) && !('strikes' in rep), 'report: the rejected word, no claims or strikes', JSON.stringify(rep.rejected));
-	check(rep.settings.hideTime === true && rep.settings.vibration === false && rep.settings.details === true && rep.build.version === '0.2' && rep.env.haptics === 'vibrate' && rep.intro === INTRO, 'report: settings, version, haptics, first run');
+	check(rep.settings.hideTime === true && rep.settings.vibration === false && rep.settings.details === true && rep.build.version === VERSION && rep.env.haptics === 'vibrate' && rep.intro === INTRO, 'report: settings, version, haptics, first run');
 	check(rep.errors.length === 0, 'report: no errors logged', JSON.stringify(rep.errors));
 	await page.click('[data-close]');
 	check(!errors.length, 'play: no errors in the console', errors.join(' | '));
@@ -581,6 +582,61 @@ const cacheNames = page => page.evaluate(() => caches.keys());
 const versionLine = async page => { await page.click('.hdr [data-open="help"]'); const v = await txt(page, '.ver'); await page.click('[data-close]'); return v; };
 const waiting = page => page.waitForFunction(() => navigator.serviceWorker.getRegistration().then(r => !!(r && r.waiting)), null, { timeout: 15000, polling: 200 }).then(() => true, () => false);
 const askUpdate = page => page.evaluate(() => navigator.serviceWorker.getRegistration().then(r => r.update()));
+// ---------- what storage holds or refuses: a stored game that can't go on, a save refused ----------
+if (part('storage')) {
+	const day = DAYS.get(TODAY);
+	const started = '2026-11-27T08:00:00.000Z';
+	const t = Object.keys(day.targets);
+	const plant = snap => stateWith([], { current: { [day.id]: snap } });
+	const kept = page => page.evaluate(id => (JSON.parse(localStorage.getItem('wortnetz.state')).current || {})[id] || null, day.id);
+	const logged = page => page.evaluate(() => localStorage.getItem('wortnetz.errors') || '');
+	{
+		// junk in the fields: the game resumes with what holds, the rest dropped
+		const { ctx, page, errors } = await open({ state: plant({ startedAt: started, run: 30000, found: [t[0], 'NICHTDA'], foundAt: { [t[0]]: 5000 }, bonus: [], hints: 9, events: 5, pausedBy: null }) });
+		const st = await W(page);
+		check(await view(page) === 'play' && st && st.startedAt === started && JSON.stringify(st.found) === JSON.stringify([t[0]]) && st.hints === 0 && Array.isArray(st.events) && st.pausedBy === 'reload', 'storage: a stored game with junk resumes, paused, with only what holds', st && JSON.stringify({ found: st.found, hints: st.hints }));
+		check(!errors.length, 'storage: … without errors', errors.join(' | '));
+		await ctx.close();
+	}
+	for (const [what, snap] of [['solved', { startedAt: started, solved: true }], ['nothing left to find', { startedAt: started, found: t }], ['no start time', { startedAt: '1', events: 5 }]]) {
+		const { ctx, page, errors } = await open({ state: plant(snap) });
+		const st = await W(page);
+		check(await view(page) === 'play' && st && !st.startedAt && st.found.length === 0 && !(await kept(page)) && (await logged(page)).includes('restore'), `storage: a stored game that can't go on (${what}): dropped, logged, the board opens fresh`);
+		check(!errors.length, `storage: … (${what}) without errors`, errors.join(' | '));
+		await ctx.close();
+	}
+	{
+		// a save the browser refuses: told once, again only after a save worked in between
+		const SAY = 'Nicht gespeichert: Der Browser nimmt nichts mehr an. Einstellungen, Backup, Exportieren sichert deine Lösungen.';
+		const { ctx, page } = await open({ ctx: { isMobile: true, hasTouch: true }, state: stateWith() });
+		const fill = () => page.evaluate(() => {
+			let lo = 0, hi = 16 << 20;
+			localStorage.removeItem('ui-check.filler');
+			while (lo < hi) {
+				const mid = (lo + hi + 1) >> 1;
+				try { localStorage.setItem('ui-check.filler', 'x'.repeat(mid)); lo = mid; } catch { hi = mid - 1; }
+			}
+			localStorage.setItem('ui-check.filler', 'x'.repeat(lo));
+		});
+		const shown = async () => { const v = await vis(page, '#toast'), x = await txt(page, '#toast'); await page.evaluate(() => { document.getElementById('toast').hidden = true; }); return v ? x : ''; };
+		const words = Object.values(day.targets);
+		await page.evaluate(() => { document.getElementById('toast').hidden = true; });
+		await fill();
+		await drag(page, words[0].paths[0]);
+		const first = await shown();
+		check(first === SAY && await page.evaluate(() => document.getElementById('toast').classList.contains('warn')), 'storage: a refused save shows the warning', first);
+		await drag(page, words[1].paths[0]);
+		check(await shown() === '', 'storage: the next refused save shows nothing');
+		await page.evaluate(() => localStorage.removeItem('ui-check.filler'));
+		await drag(page, words[2].paths[0]);
+		check(await shown() === '' && (await kept(page)), 'storage: room again: the save works, no warning');
+		await fill();
+		await drag(page, words[3].paths[0]);
+		check(await shown() === SAY, 'storage: full again: the warning once more');
+		await ctx.close();
+	}
+}
+
 if (part('offline')) {
 	rmSync(BUILDS, { recursive: true, force: true });
 	const A = build('aaaaaaa'), B = build('bbbbbbb'), C = build('ccccccc');
@@ -616,7 +672,7 @@ if (part('offline')) {
 	await Promise.all([page.waitForEvent('load'), page.click('#toast [data-act="toast"]')]);
 	await ready(page);
 	check((await txt(page, '#toast')).includes('Neue Version geladen.'), '"Neu laden": then the toast "Neue Version geladen."', await txt(page, '#toast'));
-	check((await txt(page, '#foot')).includes('wortnetz 0.2 · bbbbbbb · 2026-11-20'), 'the foot of the page: version, commit, date (as xxl-scorer)', await txt(page, '#foot'));
+	check((await txt(page, '#foot')).includes(`wortnetz ${VERSION} · bbbbbbb · 2026-11-20`), 'the foot of the page: version, commit, date (as xxl-scorer)', await txt(page, '#foot'));
 	check(await css(page) === 'bbbbbbb' && (await versionLine(page)).includes('bbbbbbb'), '"Neu laden": the new release, page and files');
 	check(JSON.stringify(await cacheNames(page)) === '["wortnetz-bbbbbbb"]', '"Neu laden": the old release\'s cache is gone', JSON.stringify(await cacheNames(page)));
 	check(Object.keys(await page.evaluate(() => window.__wortnetz.state().solves)).length === 1, 'update: the solve is kept');

@@ -55,17 +55,18 @@ One object in localStorage, under keys that start with "wortnetz.":
     solves     the first solve of each puzzle (a replay never replaces it): time, active time,
                words, hints, the two ratios for the factor
     started    when each puzzle was first touched ("Gespielt")
-    current    a snapshot of each unsolved game, so a reload resumes it (paused)
+    current    a snapshot of each unsolved game, so a reload resumes it (paused); read back,
+               it keeps only what fits its board, and one that can't go on is dropped
     games      the last 120 games' event logs, for the debug report
     settings   hide the time, vibration, the backup file's name, the end screen's details
 
 The **backup file** holds solves, starts and settings; stats and the factor follow from them.
 Reading one treats it as a file anyone could have edited: only known fields of the right type,
-words of A-Z and ÄÖÜ, ids and dates of the expected shape, at most 4 MB and 5000 solves (a
-year of daily play is about 0.4 MB). The maps keyed by puzzle id have no prototype. An import
-merges: per puzzle the earlier solve wins, starts keep the earlier, the file's settings replace
-these. Undo in the toast puts the state from before back; if the browser's storage refuses the
-merged state, the import is undone at once.
+words of A-Z and ÄÖÜ, ids and dates of the expected shape, times only as the page writes them
+(toISOString), at most 4 MB and 5000 solves (a year of daily play is about 0.4 MB). The maps keyed
+by puzzle id have no prototype. An import merges: per puzzle the earlier solve wins, starts keep
+the earlier, the file's settings replace these. Undo in the toast puts the state from before back;
+if the browser's storage refuses the merged state, the import is undone at once.
 
 The **debug report** (vendored from xxl-scorer) is a file the player saves: the page's state,
 the recent games, the device's facts and the error log. Nothing is ever sent.
@@ -77,7 +78,9 @@ every release is a new worker with its own cache, wortnetz-<commit>. Installing 
 file and every batch into it, all or none; the page is then served from that cache. A new
 release waits. Once no game is running, the page offers it once ("Neue Version da." with "Neu
 laden"); left alone, it takes over at the next start. Then the old caches go, and the page says
-"Neue Version geladen." A checkout that wasn't archived is "dev": network first.
+"Neue Version geladen." The site's own settings (local/config.json) can change without a
+release: the worker answers them from its cache and fetches them anew behind it, so a change
+shows from the next start. A checkout that wasn't archived is "dev": network first.
 
 The page loads nothing from anywhere else (Content-Security-Policy in index.html, checked by
 tests/static.test.js). The one link out, to the original game in "So geht's", is a plain link.

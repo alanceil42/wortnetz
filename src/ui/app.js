@@ -43,8 +43,14 @@ let CONFIG = {};
 let intro = null;	// the first run while it shows
 let updateReady = false;
 
+/** a refused save is told once, and again only after a save worked in between */
+let refusalTold = false;
 function save() {
-	if (!saveState(ST)) errorLog.add('storage', 'localStorage refused the save');
+	if (saveState(ST)) { refusalTold = false; return; }
+	errorLog.add('storage', 'localStorage refused the save');
+	if (refusalTold) return;
+	refusalTold = true;
+	toast('Nicht gespeichert: Der Browser nimmt nichts mehr an. Einstellungen, Backup, Exportieren sichert deine Lösungen.', { warn: true });
 }
 /** the running game kept for a reload, and its record for the debug report */
 function persist() {
@@ -199,9 +205,20 @@ function openDay(date, { fresh = false } = {}) {
 	$('day').textContent = dayLabel(date);
 	const snap = ST.current[p.id];
 	const solve = ST.solves[p.id];
-	if (!fresh && snap && snap.startedAt) G = g.restore(snap, p);
-	else if (!fresh && solve) { G = null; showStored(p, solve); return; }
-	else G = g.newGame(p, { id: gameId(), replay: !!solve });
+	if (!fresh && snap) {
+		// an unfinished game that can't go on is dropped: the day's board opens either way
+		let back = null;
+		try { back = g.restore(snap, p); if (back) showGame(back); } catch (err) { back = null; errorLog.add('restore', err && err.message); }
+		if (back) return;
+		errorLog.add('restore', `unfinished game of ${p.id} dropped`);
+		delete ST.current[p.id];
+		save();
+	}
+	if (!fresh && solve) { G = null; showStored(p, solve); return; }
+	showGame(g.newGame(p, { id: gameId(), replay: !!solve }));
+}
+function showGame(game) {
+	G = game;
 	rot = 0; ({ view: VIEW, cell: CELL } = g.rotation(0));
 	vis = g.visible(G); path = []; tracing = tapping = false; flashP = null;
 	showView('play'); draw(); render(); hintBar();

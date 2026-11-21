@@ -5,6 +5,8 @@
 // tapping, letters and lines vanishing once no open target needs them, bonus words -10 s, hints
 // from a word family not started yet, pause, the events it records.
 
+import { isTime } from './records.js';
+
 /** a line's key, the same both ways */
 export const ek = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`);
 
@@ -195,12 +197,46 @@ export function snapshot(G, now) {
 	return { ...rest, run: Math.round(activeMs(G, now)), since: null };
 }
 
-/** a stored game back, paused (a reload is a pause by leaving the page) */
+const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+const count = (v, hi) => (Number.isInteger(v) && v >= 0 && v <= hi ? v : undefined);
+const ms = v => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1e10 ? v : undefined);
+const EVENTS_MAX = 5000;
+
+/**
+ * A stored game back, paused (a reload is a pause by leaving the page). Only this page writes
+ * the snapshots, but a bug or another release's format could leave anything in storage, and a
+ * game that throws would keep the day's board shut on every visit. So only known fields of the
+ * right type are taken, words only from this board.
+ * @returns {object|null} null when it is no game that can go on (never started, already
+ *   solved: a solve is kept apart, or nothing left to find)
+ */
 export function restore(snap, p) {
-	const G = { ...newGame(p), ...snap, p, bonusSet: new Set(p.bonus || []), since: null };
-	if (G.startedAt && !G.solved && !G.pausedBy) {
+	if (!isObj(snap) || !isTime(snap.startedAt) || snap.solved === true) return null;
+	const targets = Object.keys(p.targets), bonusSet = new Set(p.bonus || []);
+	const words = (v, ok) => [...new Set(Array.isArray(v) ? v.filter(w => typeof w === 'string' && ok(w)) : [])];
+	const found = words(snap.found, w => Object.hasOwn(p.targets, w));
+	if (found.length >= targets.length) return null;
+	const foundAt = {};
+	if (isObj(snap.foundAt)) for (const w of found) { const t = ms(snap.foundAt[w]); if (t !== undefined) foundAt[w] = t; }
+	const bonus = words(snap.bonus, w => bonusSet.has(w));
+	const G = newGame(p, { id: typeof snap.id === 'string' && snap.id.length <= 60 ? snap.id : '', replay: snap.replay === true });
+	Object.assign(G, {
+		startedAt: snap.startedAt,
+		run: ms(snap.run) ?? 0,
+		bonusMs: bonus.length * BONUS_MS,
+		found, foundAt, bonus,
+		tries: count(snap.tries, 1e6) ?? 0,
+		hints: count(snap.hints, HINTS) ?? 0,
+		pausedBy: typeof snap.pausedBy === 'string' && snap.pausedBy.length <= 20 ? snap.pausedBy : null,
+		events: Array.isArray(snap.events) ? snap.events.filter(isObj).slice(0, EVENTS_MAX) : [],
+	});
+	if (typeof snap.hintW === 'string' && Object.hasOwn(p.targets, snap.hintW)) {
+		G.hintW = snap.hintW;
+		G.hintK = count(snap.hintK, snap.hintW.length) ?? 0;
+	}
+	if (!G.pausedBy) {
 		G.pausedBy = 'reload';
-		G.events = [...G.events, { t: G.run, ty: 'pause', why: 'reload' }];
+		G.events.push({ t: G.run, ty: 'pause', why: 'reload' });
 	}
 	return G;
 }
