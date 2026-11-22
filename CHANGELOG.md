@@ -7,6 +7,11 @@ that are not released yet collect under "Unreleased".
 
 ## Unreleased
 
+- More words count as bonus words: short commands such as "lieg" or "bekomm", and sailing words
+  such as Liek, Gaffel or Klampe.
+- Words that felt odd as puzzle answers are now bonus words only, among them Soli, Kita, User
+  and lies. 59 of the year's boards were remade without them.
+
 
 ## 0.2.1 - 2026-11-21
 

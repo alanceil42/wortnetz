@@ -171,3 +171,11 @@ SOLLE KINDERARBEIT WEBSITE
 ANGETAN SAUFEN
 DRECKSARBEIT JÄGERMEISTER SOLANG
 ANERKANNT FÖTUS
+# 2026-11-22, from a screen of the 4-letter targets (they come up most): a clipped word for a tax
+# or a daycare, an imperative (as SIEH), English where German has its own word, Latin and prefixes,
+# an inflected form; illness, death, prison, religion and sex as in the lists above; GEIL (0.1's
+# last boards still had it)
+SOLI KITA LIES USER ANNO ANTI ACTA DATO DITO NOVA HOHE
+ORAL KOMA SARG HAFT KNAST IMAM ASYL
+# read in the redone boards: an inflected pronoun (as DESSEN)
+DERER
