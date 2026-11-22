@@ -69,6 +69,24 @@ class Targets(unittest.TestCase):
 		for w in ('ZEIGE', 'SENDE', 'WERBE', 'PUNKTE', 'TEILE', 'GEISTER', 'ALTEN'):
 			self.assertFalse(w in gen.TARGET, w)
 
+	def test_short_imperatives(self):
+		# bonus words, never targets (0.2.2): LIEG was rejected on 2026-11-22
+		for w in ('LIEG', 'BEKOMM', 'VERLIER', 'TRENN', 'LERN'):
+			self.assertTrue(w in gen.LEX and w not in gen.TARGET, w)
+		# GEB, NEHM: gib, nimm; ABHOL, ANGEH: separable; ÖFFN, RECHN: needs -e; MÖCHT, BRÄUCHT: no imperative
+		for w in ('NEHM', 'ABHOL', 'ANGEH', 'MITBRING', 'ÖFFN', 'RECHN', 'MÖCHT', 'BRÄUCHT', 'BITT'):
+			self.assertFalse(w in gen.LEX, w)
+
+	def test_allow_list(self):
+		# found when traced, never targets: LIEK on 2026-11-22, sailing words with it
+		for w in ('LIEK', 'BRIE', 'GAFFEL', 'KLAMPE', 'FIEREN', 'SEEMEILE'):
+			self.assertTrue(w in gen.LEX and w not in gen.TARGET, w)
+
+	def test_four_letter_bonus_only(self):
+		# 2026-11-22: GEIL, SOLI and others are words, never targets
+		for w in ('GEIL', 'SOLI', 'KITA', 'LIES', 'USER', 'ORAL', 'SARG'):
+			self.assertTrue(w in gen.LEX and w not in gen.TARGET, w)
+
 	def test_bad_from_data(self):
 		self.assertFalse(os.path.exists(os.path.join(HERE, 'disallow.txt')), 'disallow.txt belongs in the data folder')
 		self.assertTrue(gen.bad('NAZI') and gen.bad('NAZIS'))

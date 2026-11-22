@@ -18,6 +18,7 @@
 #   are noun lemmas (AUGE, KATZE, MEINUNG) and which only plurals (GESETZE, HÜTE, THEMEN);
 #   Hunspell stores AUGE as Aug + e exactly like GESETZE as Gesetz + e
 # - no zu-infinitive as a target (ANZULEGEN); easy days skip a compound that already failed
+# 0.2.2: short imperatives (LIEG) are bonus words; allow.txt holds sailing words
 #
 # Generator 3 (0.1):
 # Grown from generator 2, a prototype. What changed for 0.1:
@@ -120,6 +121,29 @@ def participle(w):
 	return False
 
 
+SEP_IMP = ('AB', 'AN', 'AUF', 'AUS', 'BEI', 'DA', 'DAR', 'DURCH', 'EIN', 'FEST', 'FORT', 'HER', 'HIN',
+	'HINTER', 'KENNEN', 'KLAR', 'LOS', 'MIT', 'NACH', 'UM', 'UNTER', 'VOR', 'WEG', 'WEITER', 'WIEDER',
+	'WOHL', 'ZU', 'ZURÜCK', 'ZUSAMMEN', 'ÜBER')
+
+
+def short_imperatives():
+	"""imperatives without -e (LIEG, BEKOMM, VERLIER): igerman98 lacks them and wordfreq has few, so
+	they were no words at all; bonus words since 0.2.2, never targets. Only where the -st form is the
+	same verb's (LIEGST; not GEBST or NEHMST, whose imperatives are GIB and NIMM), not after d or t
+	or a consonant + n or m (REDE, ÖFFNE), and no separable verb (HOL AB, not ABHOL). [(WORD, stem)]"""
+	def verb(v):
+		return v in LEX and LEX[v][2] == 'base' and LEX[v][3][:1].islower()
+	out = []
+	for w, (z, ze, kind, stem, flags) in list(LEX.items()):
+		if kind != 'base' or not stem[:1].islower() or not w.endswith('EN') or up(stem) != w: continue
+		x = w[:-2]
+		if len(x) < 4 or x in LEX or x in NAMES or bad(x) or x[-1] in 'DT': continue
+		if re.search('(?:[^LRNMH]|CH)[NM]$', x): continue
+		if any(x.startswith(p) and verb(x[len(p):] + 'EN') for p in SEP_IMP): continue
+		if any(x + e in LEX and LEX[x + e][3] == stem for e in ('ST', 'EST')): out.append((x, stem))
+	return out
+
+
 def zu_infinitive(w):
 	"""a zu-infinitive Hunspell keeps as a stem of its own: ANZULEGEN, ABZUSEHEN, ZUZUGEBEN (0.2,
 	189 targets); not a verb of its own in HINZU- (hinzugeben, hinzukommen: flag I)"""
@@ -145,6 +169,7 @@ def why_not_target(w, hand=False):
 	may be rare or an English loan"""
 	z, ze, kind, stem, flags = LEX[w]
 	if w in ALLOW and kind == 'allow': return 'allow'
+	if kind == 'imp': return 'imperative'
 	if w in STOP: return 'stop'
 	if namelike(w) and ze >= 3.0 and w not in LEMMA: return 'name?'
 	if not hand and z < 3.0 + (0.3 if len(w) == 4 else 0): return 'rare'
@@ -217,6 +242,7 @@ def load(data):
 			LEX[w] = (float(z), float(ze), kind, stem, flags)
 	for w in ALLOW:
 		if w not in LEX and not bad(w): LEX[w] = (0.0, 0.0, 'allow', w.capitalize(), '')
+	for x, stem in short_imperatives(): LEX[x] = (0.0, 0.0, 'imp', stem, '')
 	TARGET = {w for w in LEX if why_not_target(w) is None and form_ok(w)}
 	THEMES, THEME = [], set()
 	for name, window, words in themes_file(os.path.join(HERE, 'themes.txt')):
