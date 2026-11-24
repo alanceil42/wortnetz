@@ -45,7 +45,7 @@ function log(G, now, ev) {
 	G.events.push({ t: Math.round(activeMs(G, now)), ...ev });
 }
 
-/** the first touch starts the clock */
+/** the start: the tap that uncovers a new board starts the clock */
 export function start(G, now, wall = new Date().toISOString()) {
 	if (G.startedAt) return false;
 	G.startedAt = wall; G.since = now;

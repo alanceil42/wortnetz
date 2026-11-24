@@ -149,7 +149,11 @@ function render() {
 	$('hintN').textContent = G.hints;
 	$('hintN').classList.toggle('zero', !G.hints);
 	$('chips').replaceChildren(...G.found.map(w => chip(w, '')), ...G.bonus.map(w => chip(w, 'b')));
-	$('app').classList.toggle('paused', !!G.pausedBy && !G.solved);
+	// a new board stays covered until tapped: the clock starts when the letters show
+	const covered = !G.solved && (!!G.pausedBy || !G.startedAt);
+	$('app').classList.toggle('paused', covered);
+	$('pausecard').querySelector('b').textContent = G.startedAt ? 'Pause' : 'Start';
+	$('pausecard').querySelector('span').textContent = G.startedAt ? 'Tippen zum Weiterspielen' : 'Tippen zum Starten';
 	showClock();
 }
 function chip(w, cls) { const s = document.createElement('span'); s.className = `chip ${cls}`; s.textContent = w; return s; }
@@ -179,7 +183,7 @@ function hintBar() {
 	if (G.hintW && !G.found.includes(G.hintW) && !G.solved) {
 		const w = G.hintW;
 		say(w.slice(0, G.hintK) + '·'.repeat(w.length - G.hintK), `Tipp: ${w.length} Buchstaben`, 'hint', true);
-	} else if (!G.startedAt) say('', 'Zieh den Finger über die Buchstaben', '', true);
+	} else if (!G.events.some(e => e.ty === 'word')) say('', 'Zieh den Finger über die Buchstaben', '', true);
 	else say('', '', '', true);
 }
 
@@ -272,7 +276,10 @@ function resume() {
 document.addEventListener('visibilitychange', () => { if (document.hidden) { pause('hidden'); persist(); } });
 addEventListener('pagehide', () => persist());
 $('clock').addEventListener('click', () => { if (!G || !G.startedAt || G.solved) return; if (G.pausedBy) resume(); else pause('clock'); });
-$('pausecard').addEventListener('click', resume);
+$('pausecard').addEventListener('click', () => {
+	if (G && !G.startedAt && !G.solved) { startClock(); render(); hintBar(); return; }
+	resume();
+});
 
 // ---------- tracing and tapping ----------
 function pt(e) {
@@ -290,7 +297,7 @@ svg.addEventListener('pointerdown', e => {
 	if (!G || G.solved || G.pausedBy) return;
 	const [x, y] = pt(e); const i = tileAt(x, y);
 	if (i < 0 || !vis.nodes.has(i)) return;
-	startClock();
+	if (!G.startedAt) return;	// covered until the start card is tapped
 	if (tapping) {
 		const t = g.tap(vis, path, i);
 		if (t.act === 'send') { tracing = true; finish(); return; }
@@ -357,14 +364,13 @@ function flash(p, cls, then) {
 
 // ---------- hint, rotate ----------
 $('bHint').addEventListener('click', () => {
-	if (!G || G.solved || G.pausedBy) return;
+	if (!G || G.solved || G.pausedBy || !G.startedAt) return;
 	if (!G.hints) { say('', 'Keine Tipps mehr', 'bad'); return; }
-	startClock();
 	g.hint(G, now());
 	persist(); render(); hintBar();
 });
 $('bRotate').addEventListener('click', () => {
-	if (!G || G.solved || tracing || G.pausedBy) return;
+	if (!G || G.solved || tracing || G.pausedBy || !G.startedAt) return;
 	rot = (rot + 1) % 4; ({ view: VIEW, cell: CELL } = g.rotation(rot));
 	draw(); render();
 	svg.classList.remove('turn'); void svg.getBoundingClientRect(); svg.classList.add('turn');

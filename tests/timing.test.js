@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { expected, factorOf, fresh, follow, ratios, fmt } from '../src/core/timing.js';
+import { expected, factorOf, fresh, follow, follows, JOIN, ratios, fmt } from '../src/core/timing.js';
 import { berlinDate, addDays, dayMap, reached, streak, shortDay } from '../src/core/days.js';
 
 const DAY = JSON.parse(readFileSync(new URL('./fixtures/day-2026-11-26.json', import.meta.url), 'utf8'));
@@ -13,11 +13,22 @@ test('a word opening a family costs search time, a follower little', () => {
 	const ex = expected(DAY);
 	assert.equal(Object.keys(ex.at).length, 14);
 	assert.equal(ex.total, Math.max(...Object.values(ex.at)));
-	// WERKTAGS follows WERK: much cheaper than opening a family
 	const step = w => ex.at[w] - Math.max(0, ...Object.values(ex.at).filter(t => t < ex.at[w]));
-	assert.ok(step('WERKTAGS') < 5000);
+	// WERK follows WERT (same first letters, no longer): cheap
+	assert.equal(step('WERK'), Math.round(follow('WERK') * 1000));
+	// WERKTAGS goes 4 letters past WERK: a compound, priced as a word opening a family
+	assert.equal(step('WERKTAGS'), Math.round(fresh('WERKTAGS', DAY.targets.WERKTAGS.z) * 1000));
 	assert.ok(step('TRAKT') > 10000);
 	assert.equal(expected(DAY, 2).total, 2 * ex.total, 'the factor scales the whole');
+});
+
+test('a follower adds at most JOIN letters to a word of its family', () => {
+	assert.equal(JOIN, 3);
+	assert.ok(follows('STEIGEN', 'STEIG'), '+2: an inflection');
+	assert.ok(follows('STEIG', 'STEIGEN'), 'shorter than the found one');
+	assert.ok(!follows('WALDFRIEDHOF', 'WALD'), '+8: a compound');
+	assert.ok(!follows('BANKGESCHÄFT', 'BANK'));
+	assert.ok(!follows('TRANK', 'WALD'), 'another family');
 });
 
 test('the factor: geometric mean of the newest 10 ratios; none gives 1', () => {

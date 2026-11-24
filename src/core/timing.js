@@ -1,6 +1,8 @@
 // Expected times: a word that opens a word family costs search
 // time, a word of a family already found costs little; the whole times your factor, the
 // geometric mean of your last 10 ratios of time to formula (first solves only).
+// A word that goes on well past the found one (WALD, then WALDFRIEDHOF) is a new search:
+// seeing where the parts join is the hard part, so it costs as a word opening a family.
 
 import { sameFamily } from './game.js';
 
@@ -10,6 +12,10 @@ export const FACTOR_N = 10;
 export const fresh = (w, z) => 3 + 0.8 * w.length + 5 * Math.max(0, 5 - z);
 /** a word whose first letters a found target shares: 1.5 s + 0.3 s per letter */
 export const follow = w => 1.5 + 0.3 * w.length;
+/** letters a follower may add to the found word (-EN, -ERN, -UNG); more is a compound */
+export const JOIN = 3;
+/** w follows u: the same family, and at most JOIN letters longer */
+export const follows = (w, u) => sameFamily(w, u) && w.length - u.length <= JOIN;
 
 /**
  * Expected times of a puzzle's targets: in the order the formula finds them, cumulative, in ms.
@@ -22,7 +28,7 @@ export function expected(p, f = 1) {
 	let t = 0;
 	const at = {}, seen = [];
 	for (const w of ws) {
-		const fol = seen.some(u => sameFamily(w, u));
+		const fol = seen.some(u => follows(w, u));
 		t += (fol ? follow(w) : fresh(w, p.targets[w].z)) * f;
 		at[w] = Math.round(t * 1000);
 		seen.push(w);
