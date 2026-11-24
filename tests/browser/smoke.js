@@ -75,6 +75,10 @@ test('first run, a word found, the foot, offline: no errors, no CSP violation, n
 	assert.equal(g.date, '2026-11-26');
 	assert.equal(g.letters.length, 16);
 	assert.equal(await page.locator('#board .tile').count(), 16, 'the board shows 16 letters');
+	// a new board waits under "Start"; the tap uncovers it and starts the clock
+	assert.ok(await page.locator('#pausecard').isVisible(), 'a new board starts covered');
+	await page.click('#pausecard');
+	assert.ok(await page.evaluate(() => !!window.__wortnetz.game().startedAt), '"Start" starts the clock');
 
 	const [w, t] = Object.entries(g.targets).sort((a, b) => b[0].length - a[0].length)[0];
 	const xy = i => page.evaluate(i => window.__wortnetz.tileXY(i), i);
