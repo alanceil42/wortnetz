@@ -188,6 +188,9 @@ if (part('looks')) for (const [w, h] of [[390, 844], [820, 1180], [1180, 820]]) 
 		const s = Math.max(1, root / 17);
 		check(Math.abs(f.rootPx - root) < 0.5 && Math.abs(f.fs - 34 * Math.min(1.35, s)) < 0.1 && Math.abs(f.cr - 34 * Math.min(1.15, s)) < 0.1, `${tag}: letters grow to 1.35, circles to 1.15`, `font ${f.fs}, r ${f.cr}`);
 		check(f.bg === TOKENS[scheme].bg && f.accent === TOKENS[scheme].accent && f.lockMeta, `${tag}: Bernstein's tokens, darkreader-lock`);
+		if (shoot) await page.screenshot({ path: `${SHOTS}/play-start-${w}-${scheme}-${sz}.png` });
+		await page.click('#pausecard');
+		check(await vis(page, '#board') && !(await vis(page, '#pausecard')), `${tag}: "Start" uncovers the board`);
 		if (shoot) await page.screenshot({ path: `${SHOTS}/play-${w}-${scheme}-${sz}.png` });
 		for (const sh of ['settings', 'archive', 'help']) {
 			await page.click(`.hdr [data-open="${sh}"], .gbar [data-open="${sh}"]`);
@@ -237,7 +240,15 @@ if (part('play')) {
 	const { ctx, page, errors } = await open({ ctx: { colorScheme: 'light', isMobile: true, hasTouch: true }, state: stateWith(), init: TOUCH });
 	let st = await W(page);
 	check(st && st.date === TODAY, 'play: today\'s puzzle by the Berlin date', st && st.date);
-	check((await txt(page, '#ctime')) === '0:00' && !st.startedAt, 'play: the clock waits for the first touch');
+	check((await txt(page, '#ctime')) === '0:00' && !st.startedAt, 'play: the clock waits for the start');
+	check(await vis(page, '#pausecard') && (await txt(page, '#pausecard b')) === 'Start' && !(await vis(page, '#board')), 'play: a new board is covered: "Start", the letters hidden');
+	await page.clock.runFor(5000);
+	check((await txt(page, '#ctime')) === '0:00' && !(await W(page)).startedAt, 'play: covered, the clock stands');
+	await page.click('#pausecard');
+	st = await W(page);
+	check(!!st.startedAt && !(await vis(page, '#pausecard')) && (await txt(page, '#msg')).includes('Zieh den Finger'), 'play: tapping "Start" uncovers the board and starts the clock; the how-to line stays');
+	await page.clock.runFor(2000);
+	check((await txt(page, '#ctime')) !== '0:00', 'play: the clock runs from the start tap');
 	check(!(await page.evaluate(() => !!document.querySelector('#bBackup, #dot, #pop'))), 'play: no Backup in the header');
 	const words = Object.entries(st.targets).sort((a, b) => a[0].length - b[0].length || (a[0] < b[0] ? -1 : 1));
 	const nn = nonsense(st), nnWord = nn && nn.map(i => st.letters[i]).join('');
@@ -318,6 +329,7 @@ if (part('play')) {
 	await page.click('#bAgain');
 	st = await W(page);
 	check(st && st.replay && !st.solved && st.found.length === 0, 'end: "Von vorn" starts it afresh, as a replay');
+	await page.click('#pausecard');
 	for (const [, t] of words) await drag(page, t.paths[0]);
 	await page.waitForTimeout(1100);
 	check((await txt(page, '#eTitle')).startsWith('Wiederholung'), 'end: the replay ends as "Wiederholung"');
@@ -505,6 +517,7 @@ if (part('intro')) {
 		check(await view(page) === 'play', 'first run: once per fresh storage: not again after a reload');
 		// "So geht's" plays it again; the running game waits, paused, and goes on afterwards
 		const words = Object.entries((await W(page)).targets);
+		await page.click('#pausecard');
 		await drag(page, words[0][1].paths[0]);
 		await page.click('.hdr [data-open="help"]');
 		await page.click('[data-act="example"]');
@@ -658,6 +671,7 @@ if (part('offline')) {
 	await ctx.setOffline(false);
 	// a game runs; a new release comes
 	const words = Object.entries((await W(page)).targets);
+	await page.click('#pausecard');
 	await drag(page, words[0][1].paths[0]);
 	ROOT = B;
 	await askUpdate(page);

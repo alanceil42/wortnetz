@@ -8,6 +8,15 @@ that are not released yet collect under "Unreleased".
 ## Unreleased
 
 
+## 0.2.3 - 2026-11-24
+
+- A new puzzle stays covered until you tap "Start"; the clock starts with that tap, so the
+  letters can't be studied before it runs.
+- The expected time counts a long compound (a word that goes on well past one you already
+  found) as a new search, not as an easy follow-up: seeing where its parts join takes time.
+- "Ried" counts as a bonus word.
+
+
 ## 0.2.2 - 2026-11-23
 
 Word lists only.

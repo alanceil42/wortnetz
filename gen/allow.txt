@@ -4,6 +4,7 @@ BRIE
 DART
 LEIN
 REISER
+RIED
 # rarer, also Duden headwords
 KRAL
 LEIS

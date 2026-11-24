@@ -31,13 +31,15 @@ game replays exactly (tests/game.test.js replays one).
   When a target is found, its letters and lines go unless an open target still needs them.
 - **Hints**: three per puzzle. A hint picks a target from a family nobody has started (else any
   open target) and shows its next letter; the next hint goes on with the same word.
-- **Time**: active time runs while the page is in front and not paused. The clock shown is
-  active time minus the bonus words. Every event is logged with its active time.
+- **Time**: a new board stays covered until tapped; the tap starts the clock, so there is no
+  looking before it runs. Active time runs while the page is in front and not paused. The clock
+  shown is active time minus the bonus words. Every event is logged with its active time.
 
 ## Expected time (src/core/timing.js)
 
 A formula gives each target a cost: opening a family costs 3 s + 0.8 s per letter + 5 s per
-Zipf point below 5; a word whose family is already found costs 1.5 s + 0.3 s per letter. The
+Zipf point below 5; a word whose family is already found costs 1.5 s + 0.3 s per letter, unless
+it goes more than 3 letters past the found word (a compound: opening a family again). The
 expected time is the sum, times your factor: the geometric mean of time / formula over your last
 ten first solves. So it learns your pace without a server.
 
@@ -54,7 +56,7 @@ One object in localStorage, under keys that start with "wortnetz.":
 
     solves     the first solve of each puzzle (a replay never replaces it): time, active time,
                words, hints, the two ratios for the factor
-    started    when each puzzle was first touched ("Gespielt")
+    started    when each puzzle was first started ("Gespielt")
     current    a snapshot of each unsolved game, so a reload resumes it (paused); read back,
                it keeps only what fits its board, and one that can't go on is dropped
     games      the last 120 games' event logs, for the debug report
