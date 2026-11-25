@@ -341,7 +341,7 @@ if (part('play')) {
 	check(st.date === '2026-11-26' && (await txt(page, '#day')).includes('Archiv'), 'play: an archive day opens');
 	// help: the version, the inspiration
 	await page.click('.hdr [data-open="help"]');
-	check((await txt(page, '.ver')).startsWith(`wortnetz ${VERSION}`) && await vis(page, '[data-act="example"]'), 'help: the version, "Probierrätsel noch einmal"');
+	check((await txt(page, '#sheet .ver')).startsWith(`wortnetz · Version ${VERSION}`) && await vis(page, '[data-act="example"]'), 'help: the version, "Probierrätsel noch einmal"');
 	const credit = await page.evaluate(() => { const a = document.querySelector('.sheet a[href^="https://pzlgames.com/"]'); return a && { t: a.closest('p').textContent, rel: a.rel }; });
 	check(credit && credit.t.includes('Zanagrams') && credit.rel.includes('noreferrer'), 'help: names Zanagrams by PZL games, linked without a referrer', credit && credit.t);
 	await page.click('[data-close]');
@@ -592,7 +592,7 @@ function build(commit) {
 const swReady = page => page.waitForFunction(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller.state === 'activated', null, { timeout: 15000 }).then(() => true, () => false);
 const css = page => page.evaluate(() => fetch('app.css').then(r => r.text()).then(t => (t.match(/build (\w+)/) || [])[1]));
 const cacheNames = page => page.evaluate(() => caches.keys());
-const versionLine = async page => { await page.click('.hdr [data-open="help"]'); const v = await txt(page, '.ver'); await page.click('[data-close]'); return v; };
+const versionLine = async page => { await page.click('.hdr [data-open="help"]'); const v = await txt(page, '#sheet .ver'); await page.click('[data-close]'); return v; };
 const waiting = page => page.waitForFunction(() => navigator.serviceWorker.getRegistration().then(r => !!(r && r.waiting)), null, { timeout: 15000, polling: 200 }).then(() => true, () => false);
 const askUpdate = page => page.evaluate(() => navigator.serviceWorker.getRegistration().then(r => r.update()));
 // ---------- what storage holds or refuses: a stored game that can't go on, a save refused ----------
@@ -686,7 +686,8 @@ if (part('offline')) {
 	await Promise.all([page.waitForEvent('load'), page.click('#toast [data-act="toast"]')]);
 	await ready(page);
 	check((await txt(page, '#toast')).includes('Neue Version geladen.'), '"Neu laden": then the toast "Neue Version geladen."', await txt(page, '#toast'));
-	check((await txt(page, '#foot')).includes(`wortnetz ${VERSION} · bbbbbbb · 2026-11-20`), 'the foot of the page: version, commit, date (as xxl-scorer)', await txt(page, '#foot'));
+	check((await txt(page, '#foot')).startsWith(`wortnetz · Version ${VERSION} · Quellcode (GPLv3)`) && !(await txt(page, '#foot')).includes('bbbbbbb'), 'the foot of the page: version, source, licence (as xxl-scorer), no commit', await txt(page, '#foot'));
+	check(await page.getAttribute('#foot a', 'href') === `https://github.com/alanceil42/wortnetz/releases/tag/v${VERSION}`, 'the foot: the version links to its release', await page.getAttribute('#foot a', 'href'));
 	check(await css(page) === 'bbbbbbb' && (await versionLine(page)).includes('bbbbbbb'), '"Neu laden": the new release, page and files');
 	check(JSON.stringify(await cacheNames(page)) === '["wortnetz-bbbbbbb"]', '"Neu laden": the old release\'s cache is gone', JSON.stringify(await cacheNames(page)));
 	check(Object.keys(await page.evaluate(() => window.__wortnetz.state().solves)).length === 1, 'update: the solve is kept');

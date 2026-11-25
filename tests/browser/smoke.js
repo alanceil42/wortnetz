@@ -91,8 +91,8 @@ test('first run, a word found, the foot, offline: no errors, no CSP violation, n
 	assert.deepEqual(await page.evaluate(() => window.__wortnetz.game().found), [w], `${w} traced and found`);
 
 	const foot = page.locator('#foot');
-	assert.match(await foot.textContent(), /^wortnetz \d+\.\d+/);
-	assert.equal(await foot.locator('a').getAttribute('href'), IMPRINT, 'the Impressum link from local/config.json');
+	assert.match(await foot.textContent(), /^wortnetz · Version \d+\.\d+.* · Quellcode \(GPLv3\) · /);
+	assert.equal(await foot.locator('#imprintFoot').getAttribute('href'), IMPRINT, 'the Impressum link from local/config.json');
 
 	await page.waitForFunction(() => navigator.serviceWorker.controller, null, { timeout: 15000 });
 	await ctx.setOffline(true);
@@ -137,7 +137,7 @@ test("a release's worker: the Impressum link changed on the site reaches an inst
 	page.on('console', m => { if (m.type() === 'error') problems.push(`console: ${m.text()}`); });
 	page.on('pageerror', e => problems.push(`page: ${e.message}`));
 	await page.clock.install({ time: new Date('2026-11-26T10:00:00+01:00') });
-	const href = () => page.locator('#foot a').getAttribute('href', { timeout: 2000 }).catch(() => null);
+	const href = () => page.locator('#imprintFoot').getAttribute('href', { timeout: 2000 }).catch(() => null);
 	/** a start: the page reloaded, the foot drawn */
 	const start = async () => {
 		await page.reload();

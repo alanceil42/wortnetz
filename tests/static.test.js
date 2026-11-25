@@ -35,9 +35,10 @@ test('no style attribute written into markup strings (the policy blocks them)', 
 
 test('no request leaves the site: no http(s) URL in the page code', () => {
 	for (const f of [...walk('src'), 'index.html']) {
-		// the one exception: the original game, credited in "So geht's" as a link (a navigation the
-		// player chooses, without a referrer), never fetched by the page
-		const urls = (read(f).match(/https?:\/\/[^\s'"`)]+/g) || []).filter(u => !u.startsWith('http://www.w3.org/') && u !== 'https://pzlgames.com/games/zanagrams/');
+		// the exceptions are links, navigations the player chooses, never fetched by the page: the
+		// original game, credited in "So geht's", and the source with its releases, in the foot
+		const links = ['https://pzlgames.com/games/zanagrams/', 'https://github.com/alanceil42/wortnetz'];
+		const urls = (read(f).match(/https?:\/\/[^\s'"`)]+/g) || []).filter(u => !u.startsWith('http://www.w3.org/') && !links.includes(u));
 		assert.deepEqual(urls, [], f);
 	}
 });
