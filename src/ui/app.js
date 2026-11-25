@@ -26,6 +26,8 @@ const now = () => performance.now();
 const errorLog = startErrorLog(errorStore);
 /** the game wortnetz is made after, named in "So geht's": a link the player may follow, no request of the page */
 const ORIGINAL = 'https://pzlgames.com/games/zanagrams/';
+/** where the source is: the version links to its release there, as in xxl-scorer's foot */
+const SOURCE = 'https://github.com/alanceil42/wortnetz';
 
 // ---------- state ----------
 let ST = loadState();
@@ -83,11 +85,16 @@ async function loadConfig() {
 	}
 }
 
-/** "wortnetz 0.2 · commit · date · Impressum": in "So geht's" and at the page's foot (as xxl-scorer's) */
-function verLine(id) {
+/** "wortnetz · Version 0.2 · Quellcode (GPLv3) · Impressum" at the page's foot (as xxl-scorer's);
+ * full: in "So geht's", with the commit and date, which tell two builds of one version apart */
+function verLine(id, full = false) {
 	const b = buildInfo();
 	const link = imprintLink(CONFIG);
-	return `wortnetz ${esc(b.version)}${b.commit ? ` · ${esc(b.commit)}` : ''}${b.date ? ` · ${esc(b.date)}` : ''}${link ? ` · <a${id ? ` id="${id}"` : ''} href="${esc(link.href)}" target="_blank" rel="noopener nofollow">${esc(link.label)}</a>` : ''}`;
+	const out = (href, text, attrs = '') => `<a${attrs} href="${esc(href)}" target="_blank" rel="noopener nofollow">${esc(text)}</a>`;
+	return `wortnetz · ${out(`${SOURCE}/releases/tag/v${b.version}`, `Version ${b.version}`)}`
+		+ (full && b.commit ? ` · ${esc(b.commit)}` : '') + (full && b.date ? ` · ${esc(b.date)}` : '')
+		+ ` · ${out(SOURCE, 'Quellcode')} (GPLv3)`
+		+ (link ? ` · ${out(link.href, link.label, id ? ` id="${id}"` : '')}` : '');
 }
 
 // ---------- larger type ----------
@@ -573,7 +580,7 @@ function openSheet(kind) {
 		<button class="btn" type="button" data-act="example">Probierrätsel noch einmal</button>
 		<div class="group"><p class="text">Gespeichert wird nur auf diesem Gerät. Einstellungen, Backup sichert deine Lösungen als Datei.</p></div>
 		<div class="group"><p class="text">wortnetz ist eine deutsche Version von <a href="${ORIGINAL}" target="_blank" rel="noopener noreferrer nofollow">Zanagrams</a>, einem englischen Worträtsel von PZL games. Danke für die Idee! wortnetz ist ein Hobbyprojekt und nicht mit PZL games verbunden.</p></div>
-		<p class="ver">${verLine('imprint')}</p>`;
+		<p class="ver">${verLine('imprint', true)}</p>`;
 	}
 	$('sheet').innerHTML = h;
 	$('scrim').hidden = false;
@@ -766,7 +773,7 @@ async function main() {
 		say('', 'Rätsel nicht geladen. Neu laden?', 'bad', true);
 		return;
 	}
-	config.then(() => { $('foot').innerHTML = verLine(); });
+	config.then(() => { $('foot').innerHTML = verLine('imprintFoot'); });
 	TODAY = berlinDate();
 	if (rec.needsIntro(ST)) showIntro();
 	else openToday();
