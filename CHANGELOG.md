@@ -7,6 +7,10 @@ that are not released yet collect under "Unreleased".
 
 ## Unreleased
 
+- "Gram" counts as a bonus word.
+- The short commands and sailing words of 0.2.2 count as bonus words on every board of the
+  year; until now only the 59 remade boards had them.
+
 
 ## 0.2.3 - 2026-11-24
 

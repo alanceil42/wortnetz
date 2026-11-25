@@ -6,7 +6,9 @@
 # - all batches together: no headline twice, no pair of theme words twice, and index.json
 #   lists every batch file, without overlapping days
 # - older batches (0.1) were made under older rules and stay as played: only reported
-#	python3 gen/check.py [puzzles/batch-*.json ...] [--data ../wortnetz-private/gen]
+# - --bonus (about 5 minutes): every generator 4 day's bonus list is what today's lists give
+#   (after a list change, gen.py --rebonus brings them in step)
+#	python3 gen/check.py [puzzles/batch-*.json ...] [--data ../wortnetz-private/gen] [--bonus]
 import argparse, datetime, glob, itertools, json, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -15,6 +17,7 @@ import gen
 ap = argparse.ArgumentParser()
 ap.add_argument('files', nargs='*')
 ap.add_argument('--data', default=os.environ.get('WORTNETZ_DATA', os.path.join(HERE, '..', '..', 'wortnetz-private', 'gen')))
+ap.add_argument('--bonus', action='store_true', help="also the bonus lists against today's lists (slow)")
 a = ap.parse_args()
 gen.load(a.data)
 PUZ = os.path.join(HERE, '..', 'puzzles')
@@ -82,6 +85,22 @@ for fn in files:
 			elif w not in gen.LEX: fail(f'{day}: {w} not in the lexicon')
 			elif w not in gen.TARGET: fail(f"{day}: {w} is no target now ({gen.why_not_target(w) or 'not a base form'})")
 	print(f"{os.path.basename(fn)}: {len(b['days'])} days checked" + ('' if g4 else ' (older rules: reported only)'))
+
+# --bonus: the stored bonus lists against today's lists
+if a.bonus:
+	import hunbonus
+	hunbonus.init(os.path.join(a.data, 'package', 'index'), gen)
+	for fn in files:
+		b = json.load(open(fn, encoding='utf-8'))
+		if b.get('gen', '') < 'g4': continue
+		off = 0
+		for d in b['days']:
+			want = set(gen.bonus_words(d['letters'], {tuple(e) for e in d['edges']}, d['targets']))
+			if want != set(d['bonus']):
+				off += 1
+				if off <= 5: fail(f"{d['date']}: bonus list off: +{sorted(want - set(d['bonus']))} -{sorted(set(d['bonus']) - want)}")
+		if off > 5: fail(f'{os.path.basename(fn)}: {off - 5} more days with a bonus list off; gen.py --rebonus')
+		print(f'{os.path.basename(fn)}: bonus lists checked')
 
 # index.json: every batch file, by start, no overlap
 idx = json.load(open(os.path.join(PUZ, 'index.json'), encoding='utf-8'))['batches']
