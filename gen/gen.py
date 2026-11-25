@@ -6,6 +6,8 @@
 #	python3 gen/gen.py --board 501 [--theme Auto]               one themed board, printed (a probe)
 #	python3 gen/gen.py --redo 2027-01-05,2027-03-02             new boards for these days only (after
 #	                                                            a list fix; the other days stay)
+#	python3 gen/gen.py --rebonus                                every day's bonus list by today's
+#	                                                            lists, boards unchanged
 #
 # What changed for 0.2 (generator 4):
 # - a board is the best of MAX_TRIES tries, no wall time: a seed always gives the same board
@@ -19,6 +21,8 @@
 #   Hunspell stores AUGE as Aug + e exactly like GESETZE as Gesetz + e
 # - no zu-infinitive as a target (ANZULEGEN); easy days skip a compound that already failed
 # 0.2.2: short imperatives (LIEG) are bonus words; allow.txt holds sailing words
+# 0.2.4: --rebonus: a list change that only adds bonus words refreshes every day's bonus list in
+#   place (boards and ids unchanged); --redo alone left them on the days it didn't touch
 #
 # Generator 3 (0.1):
 # Grown from generator 2, a prototype. What changed for 0.1:
@@ -532,8 +536,7 @@ def board(seed, group, avoid=frozenset(), pairs=frozenset(), headline=None, plac
 		if not best or s > best[0]: best = (s, letters, edges, targets, bonus, th)
 	if not best: return None, tries, kept, time.time() - t0
 	s, letters, edges, targets, bonus, th = best
-	import hunbonus
-	for w, ps in hunbonus.extra(letters, edges, set(targets) | set(bonus)).items(): bonus[w] = ps
+	bonus = bonus_words(letters, edges, targets, bonus)
 	head = headline or max(targets, key=lambda w: (len(w), w))
 	return {
 		'id': board_id(letters, edges), 'seed': seed, 'score': s, 'easy': bool(headline), 'headline': head,
@@ -585,6 +588,41 @@ def batches(out):
 			with open(os.path.join(out, fn), encoding='utf-8') as f:
 				res.append((fn, json.load(f)))
 	return res
+
+
+def bonus_words(letters, edges, targets, found=None):
+	"""every bonus word of a board: what trace() finds that is no target, plus the words only
+	Hunspell knows (hunbonus); found: trace()'s non-targets when already known. {word: paths}"""
+	import hunbonus
+	if found is None:
+		found = {w: p for w, p in trace(letters, edges).items() if w not in targets}
+	bonus = dict(found)
+	for w, ps in hunbonus.extra(letters, edges, set(targets) | set(bonus)).items(): bonus[w] = ps
+	return bonus
+
+
+def rebonus(a):
+	"""every day of every generator 4 batch gets its bonus list by today's rules; the board, its
+	targets and its id stay. Refuses when a day's targets would change (that needs --redo).
+	Older batches stay as played."""
+	for fn, batch in batches(a.out):
+		if batch.get('gen', '') < 'g4': continue
+		added = removed = days = 0
+		for d in batch['days']:
+			edges = {tuple(e) for e in d['edges']}
+			found = trace(d['letters'], edges)
+			t = set(d['targets'])
+			if {w for w in found if w in TARGET or w == d['headline']} != t:
+				sys.exit(f"gen.py --rebonus: {d['date']}: the targets changed; --redo that day first")
+			new = sorted(bonus_words(d['letters'], edges, t, {w: p for w, p in found.items() if w not in t}))
+			old = set(d['bonus'])
+			if set(new) != old:
+				days += 1; added += len(set(new) - old); removed += len(old - set(new))
+				print(f"{d['date']}: +{' +'.join(sorted(set(new) - old)) or '-'}"
+					+ (f" -{' -'.join(sorted(old - set(new)))}" if old - set(new) else ''), flush=True)
+			d['bonus'] = new
+		write_json(os.path.join(a.out, fn), batch, separators=(',', ':'))
+		print(f'wrote {fn}: {days} days changed, {added} bonus words added, {removed} removed', flush=True)
 
 
 def redo(a, dates):
@@ -664,6 +702,7 @@ def main():
 	ap.add_argument('--board', type=int, help='probe: one themed board with this seed, printed')
 	ap.add_argument('--theme', help="the probe's theme group (default: one picked by the seed)")
 	ap.add_argument('--redo', help='YYYY-MM-DD,...: new boards for these days only, in their batch')
+	ap.add_argument('--rebonus', action='store_true', help="every day's bonus list by today's rules, boards unchanged")
 	a = ap.parse_args()
 	load(a.data)
 	sys.path.insert(0, HERE)
@@ -671,6 +710,9 @@ def main():
 	hunbonus.init(os.path.join(a.data, 'package', 'index'), sys.modules[__name__])
 	if a.redo:
 		redo(a, [s.strip() for s in a.redo.split(',') if s.strip()])
+		return
+	if a.rebonus:
+		rebonus(a)
 		return
 	if a.board is not None:
 		groups = [g for g in THEMES if len(g[2]) >= 2]

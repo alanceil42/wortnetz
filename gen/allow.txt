@@ -5,6 +5,7 @@ DART
 LEIN
 REISER
 RIED
+GRAM
 # rarer, also Duden headwords
 KRAL
 LEIS
