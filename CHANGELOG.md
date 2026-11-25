@@ -10,8 +10,11 @@ that are not released yet collect under "Unreleased".
 
 ## 0.2.5 - 2026-11-25
 
+The foot of the page only.
+
 - The foot of the page names the version (a link to its release notes) and links to the source
   code and its licence, GPLv3. The commit and date stay in "So geht's".
+
 
 ## 0.2.4 - 2026-11-25
 
