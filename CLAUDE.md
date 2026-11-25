@@ -27,7 +27,8 @@ game, expected times, what is kept, offline, the generator), written for someone
 - Puzzles: new batches are made on the maintainer's computer with the word data, which is not
   in this repository, and come in a pull request; never generate boards in CI. Players read
   this repository: don't quote the words of days not yet played in commits or pull request
-  texts. A slip in a batch is fixed by a word list and `gen/gen.py --redo DAY,...`.
+  texts. A slip in a batch is fixed by a word list and `gen/gen.py --redo DAY,...`; a list
+  change that only adds bonus words by `gen/gen.py --rebonus` (`gen/check.py --bonus` checks).
 - The page loads nothing from other sites. Every GitHub Pages project of alanceil42 shares one
   origin (alanceil42.github.io) and with it the browser's storage: storage keys and caches stay
   under the prefix "wortnetz", the service worker's scope stays /wortnetz/, and the page refuses
