@@ -7,6 +7,11 @@ that are not released yet collect under "Unreleased".
 
 ## Unreleased
 
+
+## 0.2.8 - 2026-11-26
+
+A quicker start and three small fixes.
+
 - The page starts a little sooner: its scripts and the puzzles load all at once, not one after
   the other (felt most on the first visit, over the network).
 - A day's game left open for more than a day of playing time is now kept as solved; before, it
