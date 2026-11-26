@@ -7,6 +7,11 @@ that are not released yet collect under "Unreleased".
 
 ## Unreleased
 
+
+## 0.2.6 - 2026-11-26
+
+The Home Screen app's top only.
+
 - Started from the Home Screen icon, the page begins a little lower, clear of the frosted strip
   iOS draws under the status bar. In Safari it looks as before.
 
