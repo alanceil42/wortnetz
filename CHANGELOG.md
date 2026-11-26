@@ -7,6 +7,9 @@ that are not released yet collect under "Unreleased".
 
 ## Unreleased
 
+- The Archive no longer marks some days "leicht": the days with a long headline word aren't
+  easier, just different.
+
 
 ## 0.2.6 - 2026-11-26
 

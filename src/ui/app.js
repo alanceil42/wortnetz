@@ -571,7 +571,7 @@ function openSheet(kind) {
 			const p = DAYS.get(d), s = ST.solves[p.id], c = ST.current[p.id];
 			const st = s ? (ST.settings.hideTime ? 'gelöst' : `gelöst ${fmt(s.ms)}`) : c && c.startedAt ? 'läuft' : 'offen';
 			const cur = day && day.id === p.id ? ' cur' : '';
-			return `<button class="day${cur}" type="button" data-day="${d}"><span><b>${shortDay(d)}</b> <small>· Rätsel ${puzzleNo(d)}${p.easy ? ' · leicht' : ''}</small></span><small class="${s ? 'ok' : ''}">${st}</small></button>`;
+			return `<button class="day${cur}" type="button" data-day="${d}"><span><b>${shortDay(d)}</b> <small>· Rätsel ${puzzleNo(d)}</small></span><small class="${s ? 'ok' : ''}">${st}</small></button>`;
 		}).join('') || '<p class="note">Noch kein Tag erreicht.</p>'}</div>`;
 	} else {
 		h = `<div class="top"><h2 id="sheetTitle">So geht's</h2>${close}</div>
