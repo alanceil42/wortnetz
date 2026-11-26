@@ -392,11 +392,13 @@ function solved() {
 	if (!done.replay && !ST.solves[done.puzzle]) {
 		const at = new Date();
 		const { ratio, ratioActive } = ratios(done.p, done.final, done.active);
-		rec.addSolve(ST, {
+		const kept = rec.addSolve(ST, {
 			puzzle: done.puzzle, date: done.date, at: at.toISOString(), ms: done.final, active: done.active,
 			hints: g.HINTS - done.hints, tries: done.tries, found: done.found, foundAt: done.foundAt, bonus: done.bonus,
 			ratio, ratioActive, factorBefore: pre, onTime: done.date === berlinDate(at),
 		});
+		// a first solve the records turn away: the day opens again after a reload, so the debug report says why
+		if (!kept) errorLog.add('solve', `first solve of ${done.puzzle} not kept (ms ${done.final}, active ${done.active})`);
 	}
 	delete ST.current[done.puzzle];
 	rec.keepGame(ST, gameRecord(done));
@@ -629,6 +631,7 @@ $('fImport').addEventListener('change', async e => {
 function importBackup(b) {
 	const before = JSON.stringify(ST);
 	const r = rec.mergeBackup(ST, b);
+	if (!r) { toast(rec.MERGE_TOO_BIG, { warn: true }); return; }
 	if (!ST.intro) ST.intro = new Date().toISOString();
 	if (!saveState(ST)) {
 		// the browser's storage is full (or refuses): nothing of the file stays, so no later save fails unseen

@@ -5,7 +5,7 @@
 // tapping, letters and lines vanishing once no open target needs them, bonus words -10 s, hints
 // from a word family not started yet, pause, the events it records.
 
-import { isTime } from './records.js';
+import { isTime, EVENTS_MAX, TIME_MAX } from './records.js';
 
 /** a line's key, the same both ways */
 export const ek = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`);
@@ -199,8 +199,7 @@ export function snapshot(G, now) {
 
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const count = (v, hi) => (Number.isInteger(v) && v >= 0 && v <= hi ? v : undefined);
-const ms = v => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1e10 ? v : undefined);
-const EVENTS_MAX = 5000;
+const ms = v => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= TIME_MAX ? v : undefined);
 
 /**
  * A stored game back, paused (a reload is a pause by leaving the page). Only this page writes

@@ -1,3 +1,5 @@
 node_modules/
 *.part
 __pycache__/
+# Claude Code's local settings (sandbox, permissions): never published
+.claude/

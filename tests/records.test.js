@@ -255,3 +255,70 @@ test("times: only the page's own form, as toISOString writes it; ordered as time
 	assert.notEqual(mine.solves[id(1)].ms, 4321);
 	assert.deepEqual(rec.solvesInOrder(mine).map(x => x.puzzle), [id(0), id(1), id(2)]);
 });
+
+// Security review round 2: what an import, a long game or stored junk could still do.
+const at = k => new Date(Date.UTC(2026, 10, 19) + k * 60000).toISOString();
+const solvesState = (from, n) => {
+	const st = rec.emptyState();
+	for (let k = from; k < from + n; k++) { st.solves[id(k)] = { puzzle: id(k), at: at(k), ms: 1, found: [], bonus: [], foundAt: {} }; st.inFile[id(k)] = true; }
+	return st;
+};
+const fileOf = (from, n, started = {}) => ({ ok: true, solves: Object.values(solvesState(from, n).solves), started, settings: rec.cleanSettings(null) });
+
+test('an import that would take solves or starts past ENTRIES_MAX is refused, nothing changed', () => {
+	const st = solvesState(0, 4000), before = JSON.stringify(st);
+	assert.equal(rec.mergeBackup(st, fileOf(3000, 2001)), null, '4000 here and 1001 new are 5001');
+	assert.equal(JSON.stringify(st), before);
+	assert.deepEqual(rec.mergeBackup(st, fileOf(3000, 2000)), { added: 1000, replaced: 0, kept: 1000 }, 'exactly 5000 fit');
+	assert.equal(rec.cleanState(JSON.parse(JSON.stringify(st))).solves[id(4999)].at, at(4999), 'and survive a reload');
+	const starts = (from, n) => Object.fromEntries(Array.from({ length: n }, (_, k) => [id(from + k), at(from + k)]));
+	const here = rec.emptyState();
+	here.started = starts(0, 3000);
+	assert.equal(rec.mergeBackup(here, fileOf(0, 0, starts(1000, 4001))), null, '3000 here and 2001 new: the same for starts');
+	assert.equal(Object.keys(here.started).length, 3000);
+	assert.match(rec.MERGE_TOO_BIG, /^Zusammen mit diesem Browser mehr als 5000 Spiele/);
+});
+
+test('storage past ENTRIES_MAX keeps the newest solves, starts and unfinished games', () => {
+	// stored oldest last: insertion order must not decide
+	const st = solvesState(10, rec.ENTRIES_MAX), old = solvesState(0, 10);
+	const stored = { solves: { ...st.solves, ...old.solves }, inFile: { ...st.inFile, ...old.inFile }, started: {}, current: {} };
+	for (let k = rec.ENTRIES_MAX + 9; k >= 0; k--) {
+		stored.started[id(k)] = at(k);
+		stored.current[id(k)] = { startedAt: at(k), events: [] };
+	}
+	const back = rec.cleanState(JSON.parse(JSON.stringify(stored)));
+	for (const part of ['solves', 'started', 'current', 'inFile']) {
+		assert.equal(Object.keys(back[part]).length, rec.ENTRIES_MAX, part);
+		assert.ok(back[part][id(rec.ENTRIES_MAX + 9)], `${part}: the newest kept`);
+		assert.equal(back[part][id(9)], undefined, `${part}: the oldest gone`);
+	}
+});
+
+test('a solve after more than a day of active time is kept, up to TIME_MAX', () => {
+	const st = rec.emptyState(), day = 864e5;
+	assert.ok(rec.addSolve(st, solveOf(P(id(1), '2026-11-19'), { at: '2026-11-20T09:00:00.000Z', ms: day + 5000, active: day + 9000 })));
+	const back = rec.cleanState(JSON.parse(JSON.stringify(st))).solves[id(1)];
+	assert.deepEqual([back.ms, back.active], [day + 5000, day + 9000], 'through a reload');
+	assert.equal(rec.addSolve(st, solveOf(P(id(2), '2026-11-19'), { at: '2026-11-20T09:00:00.000Z', ms: rec.TIME_MAX + 1 })), false);
+	// the same cap as a stored game's
+	const G = g.newGame(DAY, { id: 'x' });
+	g.start(G, 0);
+	assert.equal(g.restore(g.snapshot(G, day + 1000), DAY).run, day + 1000);
+});
+
+test("stored games' events: a list of objects, whatever storage held (the debug report reads them)", () => {
+	const junk = [5, 'x', null, {}, [null, 3, { ty: 'word', w: 'NETZ' }]];
+	const st = rec.cleanState({
+		games: junk.map((events, k) => ({ id: `g${k}`, events })),
+		current: Object.fromEntries(junk.map((events, k) => [id(k), { startedAt: at(k), events }])),
+	});
+	const all = [...st.games, ...Object.values(st.current)];
+	assert.equal(all.length, 10);
+	for (const x of all) assert.ok(Array.isArray(x.events) && x.events.every(e => e && typeof e === 'object' && !Array.isArray(e)));
+	assert.deepEqual(st.games.at(-1).events, [{ ty: 'word', w: 'NETZ' }]);
+	// what debugReport's pick does with them
+	assert.deepEqual(all.flatMap(x => x.events.filter(e => e.ty === 'word').map(e => e.w)), ['NETZ', 'NETZ']);
+	const long = rec.cleanState({ games: [{ events: Array.from({ length: rec.EVENTS_MAX + 3 }, (_, t) => ({ t })) }] });
+	assert.equal(long.games[0].events.length, rec.EVENTS_MAX);
+});
