@@ -1,7 +1,7 @@
 // Which version runs: the release and, filled in by
 // `git archive` (.gitattributes: export-subst), the commit it was made from. A checkout that was
 // not archived shows the placeholders, which buildInfo() turns into null.
-export const VERSION = '0.2.5';
+export const VERSION = '0.2.6';
 const RAW = { commit: '$Format:%h$', date: '$Format:%cs$' };
 
 export function buildInfo() {
