@@ -67,12 +67,13 @@ const tick = what => haptic(what, ST.settings.vibration);
 // ---------- puzzles, the site's config ----------
 async function loadPuzzles() {
 	const idx = await (await fetch('puzzles/index.json', { cache: 'no-cache' })).json();
-	const batches = [];
-	for (const b of idx.batches || []) {
+	// all batches at once (a first visit waits one round trip, not one per batch), kept in the
+	// index's order: a later batch wins a day both have
+	const batches = await Promise.all((idx.batches || []).map(async b => {
 		const r = await fetch(`puzzles/${encodeURIComponent(b.file)}`, { cache: 'no-cache' });
-		if (r.ok) batches.push(await r.json());
-	}
-	DAYS = dayMap(batches);
+		return r.ok ? r.json() : null;
+	}));
+	DAYS = dayMap(batches.filter(Boolean));
 }
 const puzzleNo = date => [...DAYS.keys()].indexOf(date) + 1;
 /** config.json, then the site's own local/config.json (the Impressum link): later wins */

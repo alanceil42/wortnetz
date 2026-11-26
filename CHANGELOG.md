@@ -7,6 +7,9 @@ that are not released yet collect under "Unreleased".
 
 ## Unreleased
 
+- The page starts a little sooner: its scripts and the puzzles load all at once, not one after
+  the other (felt most on the first visit, over the network).
+
 
 ## 0.2.7 - 2026-11-26
 

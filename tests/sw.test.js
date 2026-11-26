@@ -28,6 +28,11 @@ test('the list names every module the page imports, and nothing that isn\'t ther
 	assert.deepEqual(js.sort(), mods, 'no module listed that the page doesn\'t load');
 });
 
+test('index.html preloads exactly the modules the page imports, so they load at once', () => {
+	const pre = [...read('index.html').matchAll(/<link rel="modulepreload" href="([^"]+)">/g)].map(m => m[1]).sort();
+	assert.deepEqual(pre, [...imports('src/ui/app.js')].sort());
+});
+
 test('the list names every file index.html and the manifest point at', () => {
 	const html = read('index.html');
 	const refs = [...html.matchAll(/\s(?:href|src)="([^"#][^"]*)"/g)].map(m => m[1]).filter(u => !/^[a-z]+:/.test(u));
