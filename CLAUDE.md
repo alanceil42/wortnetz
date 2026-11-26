@@ -1,16 +1,17 @@
 # Working on wortnetz (for Claude sessions)
 
-Read the private decision log first (project knowledge). docs/HOW-IT-WORKS.md has the core (the
-game, expected times, what is kept, offline, the generator), written for someone who codes.
+Read the private decision log first (the maintainer's setup says where). docs/HOW-IT-WORKS.md has
+the core (the game, expected times, what is kept, offline, the generator), written for someone who
+codes.
 
 - One task, one branch `claude/<topic>` from an up-to-date main, one pull request. Never push
   to main. `git fetch origin main` and rebase before starting and before pushing. The
   maintainer merges. Force-push (`--force-with-lease`) only the open pull request's own branch,
   when the maintainer asks to amend it.
-- Commits: repo-local `git config user.name Claude` and `user.email noreply@anthropic.com`;
-  end each message with `Co-Authored-By: Claude <model> <noreply@anthropic.com>`. No
-  `Claude-Session:` line and no session links in commits; pull request texts may carry the
-  session link.
+- Commits: as Claude (repo-local `git config user.name Claude` and `user.email
+  noreply@anthropic.com`, or `git -c` with both where .git/config is read-only); end each
+  message with `Co-Authored-By: Claude <model> <noreply@anthropic.com>`. No `Claude-Session:`
+  line and no session links in commits; pull request texts may carry the session link.
 - Before pushing: `npm test`, `bash tools/vendor.sh --check`, and `node tools/ui-check.mjs` for
   anything the page shows. The maintainer's own tests run outside this repository; say in the
   pull request when a change touches the game core, the backup file or the service worker.
