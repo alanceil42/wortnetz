@@ -35,7 +35,10 @@
 	--k: clamp(1px, calc(1rem / 17), 1.6px);
 	/* what sits above and below the board when it's as big as it gets: the board takes the rest
 	   of the screen's height, so word bar, board and "Noch … Wörter" fit without scrolling */
-	--chrome: calc(40px + 46 * var(--k) + max(44 * var(--k), 33.6 * var(--t) + 8px) + 92 * var(--t) + env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px));
+	/* the Home Screen app: iOS frosts the top of the page under the status bar, so the page
+	   starts this much lower there (html.home, set by app.js) */
+	--lift: 0px;
+	--chrome: calc(40px + var(--lift) + 46 * var(--k) + max(44 * var(--k), 33.6 * var(--t) + 8px) + 92 * var(--t) + env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px));
 }
 @media (prefers-color-scheme: dark) {
 	:root {
@@ -45,6 +48,7 @@
 		color-scheme: dark;
 	}
 }
+html.home { --lift: 20px; }
 html { font-size: 106.25%; -webkit-text-size-adjust: 100%; }
 /* iOS and iPadOS only (-webkit-touch-callout): the text size set in iOS; macOS Safari knows the
    keyword too but answers 13 px */
@@ -64,7 +68,7 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 svg.i { width: calc(22 * var(--k)); height: calc(22 * var(--k)); stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 [hidden] { display: none !important; }
 
-.app { max-width: max(480px, calc(480 * var(--t))); margin: 0 auto; padding: 6px 16px 16px; display: flex; flex-direction: column; gap: 6px; -webkit-user-select: none; user-select: none; }
+.app { max-width: max(480px, calc(480 * var(--t))); margin: 0 auto; padding: calc(6px + var(--lift)) 16px 16px; display: flex; flex-direction: column; gap: 6px; -webkit-user-select: none; user-select: none; }
 
 /* header, as xxl-scorer's; no Backup in it (that is in Settings) */
 .hdr { display: flex; align-items: center; gap: 0; min-height: calc(46 * var(--k)); }

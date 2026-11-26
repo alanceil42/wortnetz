@@ -759,6 +759,9 @@ function sizeChanged() {
 }
 addEventListener('resize', sizeChanged);
 
+// started from the Home Screen icon: the page sits a little lower, clear of iOS's frosted strip
+if (navigator.standalone === true || matchMedia('(display-mode: standalone)').matches) document.documentElement.classList.add('home');
+
 // ---------- start ----------
 async function main() {
 	if (await upd.takeWaiting()) return;	// a release that waited takes over now
