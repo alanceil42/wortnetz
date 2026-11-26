@@ -1,6 +1,6 @@
 {
 	"name": "wortnetz",
-	"version": "0.2.6",
+	"version": "0.2.7",
 	"description": "A German word puzzle for every day, after Zanagrams. Runs in the browser.",
 	"license": "GPL-3.0-only",
 	"private": true,
