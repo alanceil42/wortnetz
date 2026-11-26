@@ -9,6 +9,11 @@ that are not released yet collect under "Unreleased".
 
 - The page starts a little sooner: its scripts and the puzzles load all at once, not one after
   the other (felt most on the first visit, over the network).
+- A day's game left open for more than a day of playing time is now kept as solved; before, it
+  was open again after a reload.
+- A backup that would bring this browser past 5000 games is no longer imported (a toast says
+  so); before, the newest games went missing at the next reload. Past 5000 the oldest go.
+- The debug report no longer fails on games stored in an unexpected form.
 
 
 ## 0.2.7 - 2026-11-26

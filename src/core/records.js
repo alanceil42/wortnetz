@@ -17,6 +17,10 @@ export const DEFAULT_FILE_NAME = 'wortnetz-{date}';
 // every page of this site shares.
 export const BACKUP_MAX_BYTES = 4 * 1024 * 1024;
 export const ENTRIES_MAX = 5000;	// solves, starts, unfinished games, each
+export const EVENTS_MAX = 5000;	// events of one game
+// A time in a solve or a game: up to about 115 days. A day's game left open and unpaused for more
+// than a day (an iPad with Auto-Lock off) is still a solve.
+export const TIME_MAX = 1e10;
 
 /**
  * A map from puzzle id to something, without a prototype: no key, however it is spelled, can
@@ -59,8 +63,19 @@ export function isTime(v) {
 const when = v => (isTime(v) ? v : undefined);
 /** a before b, as times */
 const earlier = (a, b) => Date.parse(a) < Date.parse(b);
-/** the first ENTRIES_MAX [key, value] pairs of a plain object whose key is a puzzle id */
-const idEntries = o => Object.entries(o).filter(([k]) => ID.test(k)).slice(0, ENTRIES_MAX);
+/** the [key, value] pairs of a plain object whose key is a puzzle id */
+const idEntries = o => Object.entries(o).filter(([k]) => ID.test(k));
+/**
+ * The newest ENTRIES_MAX of [key, value] pairs, by the time timeOf gives (an ISO string). Past the
+ * limit the oldest go: a device that plays for years, or a file merged in, never loses today's.
+ */
+function newest(pairs, timeOf) {
+	if (pairs.length <= ENTRIES_MAX) return pairs;
+	const t = v => { const x = timeOf(v); return isTime(x) ? Date.parse(x) : -Infinity; };
+	return pairs.map(([k, v]) => [k, v, t(v)]).sort((a, b) => b[2] - a[2]).slice(0, ENTRIES_MAX).map(([k, v]) => [k, v]);
+}
+/** a game's events as stored: a list of objects, else none (the debug report reads them) */
+const events = v => (Array.isArray(v) ? v.filter(isObj).slice(0, EVENTS_MAX) : []);
 
 /**
  * settings as stored or read from a file: known fields of the right type only. vibration: the
@@ -82,17 +97,18 @@ export function cleanSettings(s) {
  */
 export function cleanSolve(x) {
 	if (!isObj(x)) return null;
-	const id = str(x.puzzle, 40), at = when(x.at), ms = num(x.ms, 0, 864e5);
+	const id = str(x.puzzle, 40), at = when(x.at), ms = num(x.ms, 0, TIME_MAX);
 	if (!id || !ID.test(id) || !at || ms === undefined) return null;
 	const out = { puzzle: id, at, ms };
 	const date = str(x.date, 10);
 	if (date && DATE.test(date)) out.date = date;
-	for (const k of ['active', 'hints', 'tries']) { const v = num(x[k], 0, 864e5); if (v !== undefined) out[k] = v; }
+	{ const v = num(x.active, 0, TIME_MAX); if (v !== undefined) out.active = v; }
+	for (const k of ['hints', 'tries']) { const v = num(x[k], 0, 864e5); if (v !== undefined) out[k] = v; }
 	for (const k of ['ratio', 'ratioActive']) { const v = num(x[k], 0, 1000); if (v !== undefined) out[k] = v; }
 	out.found = Array.isArray(x.found) ? x.found.filter(w => typeof w === 'string' && WORD.test(w)).slice(0, 40) : [];
 	out.bonus = Array.isArray(x.bonus) ? x.bonus.filter(w => typeof w === 'string' && WORD.test(w)).slice(0, 80) : [];
 	out.foundAt = Object.create(null);	// keyed by found words only, which WORD keeps to capitals
-	if (isObj(x.foundAt)) for (const w of out.found) { const v = num(x.foundAt[w], 0, 864e5); if (v !== undefined) out.foundAt[w] = v; }
+	if (isObj(x.foundAt)) for (const w of out.found) { const v = num(x.foundAt[w], 0, TIME_MAX); if (v !== undefined) out.foundAt[w] = v; }
 	if (isObj(x.factorBefore)) {
 		const f = num(x.factorBefore.f, 0, 1000), n = num(x.factorBefore.n, 0, 1000);
 		if (f !== undefined && n !== undefined) out.factorBefore = { f, n };
@@ -105,12 +121,21 @@ export function cleanSolve(x) {
 export function cleanState(s) {
 	const st = emptyState();
 	if (!isObj(s)) return st;
-	if (isObj(s.solves)) for (const [k, v] of idEntries(s.solves)) { const c = cleanSolve(v); if (c && c.puzzle === k) st.solves[k] = c; }
-	if (isObj(s.started)) for (const [k, v] of idEntries(s.started)) if (when(v)) st.started[k] = v;
-	if (Array.isArray(s.games)) st.games = s.games.filter(isObj).slice(-GAMES_MAX);
-	if (isObj(s.current)) for (const [k, v] of idEntries(s.current)) if (isObj(v)) st.current[k] = v;
+	if (isObj(s.solves)) {
+		const ok = idEntries(s.solves).map(([k, v]) => [k, cleanSolve(v)]).filter(([k, c]) => c && c.puzzle === k);
+		for (const [k, c] of newest(ok, c => c.at)) st.solves[k] = c;
+	}
+	if (isObj(s.started)) for (const [k, v] of newest(idEntries(s.started).filter(([, v]) => when(v)), v => v)) st.started[k] = v;
+	// the debug report's games, finished and unfinished: game.restore cleans a snapshot further
+	// when its day opens
+	if (Array.isArray(s.games)) st.games = s.games.filter(isObj).slice(-GAMES_MAX).map(x => ({ ...x, events: events(x.events) }));
+	if (isObj(s.current)) {
+		const ok = idEntries(s.current).filter(([, v]) => isObj(v)).map(([k, v]) => [k, { ...v, events: events(v.events) }]);
+		for (const [k, v] of newest(ok, v => v.startedAt)) st.current[k] = v;
+	}
 	st.settings = cleanSettings(s.settings);
-	if (isObj(s.inFile)) for (const [k, v] of idEntries(s.inFile)) if (v === true) st.inFile[k] = true;
+	// a mark belongs to a solve kept here
+	if (isObj(s.inFile)) for (const [k, v] of idEntries(s.inFile)) if (v === true && st.solves[k]) st.inFile[k] = true;
 	if (when(s.lastExport)) st.lastExport = s.lastExport;
 	if (when(s.intro)) st.intro = s.intro;
 	return st;
@@ -199,11 +224,17 @@ export function readBackup(text) {
 	return { ok: true, solves, started, settings: cleanSettings(j.settings) };
 }
 
+export const MERGE_TOO_BIG = `Zusammen mit diesem Browser mehr als ${ENTRIES_MAX} Spiele, nicht importiert.`;
+
 /**
  * An import merged in: per puzzle the first solve wins (the earlier `at`); starts keep the
- * earlier; the file's settings replace these (it is a restore). Returns counts for the toast.
+ * earlier; the file's settings replace these (it is a restore). Returns counts for the toast, or
+ * null, with nothing changed, when solves or starts together would pass ENTRIES_MAX: storage read
+ * back would drop the oldest of them at every reload.
  */
 export function mergeBackup(st, b) {
+	const union = (here, there) => new Set([...Object.keys(here), ...there]).size;
+	if (union(st.solves, b.solves.map(s => s.puzzle)) > ENTRIES_MAX || union(st.started, Object.keys(b.started)) > ENTRIES_MAX) return null;
 	let added = 0, replaced = 0, kept = 0;
 	for (const s of b.solves) {
 		const have = st.solves[s.puzzle];
