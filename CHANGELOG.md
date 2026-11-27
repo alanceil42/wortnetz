@@ -7,6 +7,8 @@ that are not released yet collect under "Unreleased".
 
 ## Unreleased
 
+- Settings: the Import button reads "Importieren" without the dots, so it fits on one line.
+
 
 ## 0.2.8 - 2026-11-26
 
