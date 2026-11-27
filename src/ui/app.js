@@ -555,7 +555,7 @@ function openSheet(kind) {
 			<p class="note">Ein leichtes Tippen bei jedem Buchstaben und bei jedem Wort.</p>` : ''}
 		</div>
 		<div class="group"><h3>Backup</h3>
-			<div class="two"><button class="btn" type="button" data-act="export"><svg class="i" aria-hidden="true"><use href="#i-down"/></svg>Exportieren</button><button class="btn" type="button" data-act="import"><svg class="i" aria-hidden="true"><use href="#i-up"/></svg>Importieren …</button></div>
+			<div class="two"><button class="btn" type="button" data-act="export"><svg class="i" aria-hidden="true"><use href="#i-down"/></svg>Exportieren</button><button class="btn" type="button" data-act="import"><svg class="i" aria-hidden="true"><use href="#i-up"/></svg>Importieren</button></div>
 			<p class="note" id="sLast">${esc(lastTxt)} Sichert deine Lösungen als Datei, zum Aufheben oder für ein anderes Gerät.</p>
 			<label class="f" for="sFile">Dateiname<input type="text" id="sFile" placeholder="${rec.DEFAULT_FILE_NAME}" value="${esc(ST.settings.fileName)}" autocomplete="off" spellcheck="false" maxlength="100"></label>
 			<p class="note">{date} wird zum Datum. Ohne {date} jedes Mal derselbe Name, die alte Datei wird ersetzt. Nächste Datei: <b id="sFileOut"></b></p>
