@@ -198,5 +198,101 @@ class Seeds(unittest.TestCase):
 		self.assertEqual(len({d['headline'] for d in after}), 3)
 
 
+class Preview(unittest.TestCase):
+	"""gen/preview.py: fresh boards apart from puzzles/, a site copy, the server"""
+	PUZZLES = os.path.join(HERE, '..', 'puzzles')
+
+	def snapshot(self):
+		import hashlib
+		return {fn: hashlib.sha1(open(os.path.join(self.PUZZLES, fn), 'rb').read()).hexdigest()
+			for fn in sorted(os.listdir(self.PUZZLES))}
+
+	def test_boards_and_site(self):
+		import datetime, json, tempfile, hunbonus, preview
+		hunbonus.init(os.path.join(DATA, 'package', 'index'), gen)
+		before = self.snapshot()
+		tries, gen.MAX_TRIES = gen.MAX_TRIES, 150
+		try:
+			today = datetime.date(2027, 3, 2)
+			batch = preview.make_batch(2, 7, self.PUZZLES, today=today, log=lambda s: None)
+			again = preview.make_batch(2, 7, self.PUZZLES, today=today, log=lambda s: None)
+		finally:
+			gen.MAX_TRIES = tries
+		self.assertEqual([d['date'] for d in batch['days']], ['2027-03-01', '2027-03-02'])
+		self.assertEqual([d['id'] for d in batch['days']], [d['id'] for d in again['days']])   # a seed, the same boards
+		avoid, pairs = preview.used(self.PUZZLES)
+		for d in batch['days']:
+			self.assertNotIn(d['headline'], avoid)             # no real day's headline shown early
+			self.assertFalse(gen.pairs_of(d['theme']['words']) & pairs)
+		srv = tempfile.mkdtemp()
+		site = preview.write_site(srv, batch)
+		site = preview.write_site(srv, batch)                  # a second run replaces the first
+		self.assertEqual(sorted(os.listdir(srv)), ['wortnetz'])
+		idx = json.load(open(os.path.join(site, 'puzzles', 'index.json'), encoding='utf-8'))
+		self.assertEqual(idx['batches'], [{'file': 'batch-2027-03-01.json', 'start': '2027-03-01', 'days': 2}])
+		self.assertEqual(sorted(os.listdir(os.path.join(site, 'puzzles'))), ['batch-2027-03-01.json', 'index.json'])
+		# not archived: the worker runs as "dev", network first, so a new board shows on reload
+		self.assertIn("'$Format:%h$'", open(os.path.join(site, 'sw.js'), encoding='utf-8').read())
+		for f in ('index.html', 'src/ui/app.js', 'vendor/xxl-scorer/src/ui/debug.js', 'icons/icon-192.png'):
+			self.assertTrue(os.path.isfile(os.path.join(site, f)), f)
+		# the recorder: in the copy only, before the page's script; the repository's page has none
+		html = open(os.path.join(site, 'index.html'), encoding='utf-8').read()
+		self.assertIn('<script src="preview-record.js"></script>\n' + preview.APP_TAG, html)
+		self.assertIn(preview.RECORD_PATH, open(os.path.join(site, 'preview-record.js'), encoding='utf-8').read())
+		self.assertNotIn('preview-record', open(os.path.join(HERE, '..', 'index.html'), encoding='utf-8').read())
+		self.assertEqual(self.snapshot(), before)               # puzzles/ untouched
+		# --show: a recorded game on a preview board, word by word; games on other boards left out
+		boards = os.path.join(srv, 'boards.json'); record = os.path.join(srv, 'record.json')
+		preview.remember(boards, batch)
+		d = batch['days'][1]; w = sorted(d['targets'])[0]
+		json.dump({'games': [{'puzzle': 'b00000000000', 'events': []}, {'puzzle': d['id'], 'startedAt': '2027-03-02T10:00:00Z',
+			'events': [{'t': 0, 'ty': 'start'}, {'t': 4200, 'ty': 'word', 'w': w, 'res': 'target', 'path': [0, 1, 2, 3]},
+				{'t': 9000, 'ty': 'hint', 'w': w, 'k': 1}]}], 'current': {}}, open(record, 'w', encoding='utf-8'))
+		text = preview.show(preview.fetch_json(1, preview.RECORD_PATH, record), preview.fetch_json(1, preview.BOARDS_PATH, boards))
+		self.assertTrue(text.startswith(f"2027-03-02 {d['id']}"), text)
+		self.assertIn(f'0:04  {w}', text)
+		self.assertIn('0:09  hint', text)
+		self.assertNotIn(f' {w} ', text.split('not found:')[1] + ' ')
+		self.assertNotIn('b00000000000', text)
+
+	def test_server(self):
+		import tempfile, threading, urllib.error, urllib.request, preview
+		srv = tempfile.mkdtemp()
+		os.makedirs(os.path.join(srv, 'wortnetz', 'src'))
+		open(os.path.join(srv, 'wortnetz', 'src', 'a.js'), 'w').write('export {};\n')
+		record = os.path.join(srv, 'record.json')
+		s = preview.make_server(srv, 0, 'right', record)
+		t = threading.Thread(target=s.serve_forever); t.start()
+		base = f'http://127.0.0.1:{s.server_address[1]}'
+		try:
+			with urllib.request.urlopen(base + '/wortnetz/src/a.js') as r:
+				self.assertEqual(r.headers['Content-Type'], 'text/javascript')   # module scripts need it
+				self.assertEqual(r.headers['Cache-Control'], 'no-cache')
+			# the record: only from the page's own origin, only JSON
+			post = lambda body, origin: urllib.request.urlopen(urllib.request.Request(base + preview.RECORD_PATH,
+				data=body, method='POST', headers={'Origin': origin}))
+			self.assertEqual(post(b'{"games": []}', base).status, 204)
+			self.assertEqual(open(record).read(), '{"games": []}')
+			# read back through the server: --show works from a shell with another temp folder
+			port = s.server_address[1]
+			self.assertEqual(preview.fetch_json(port, preview.RECORD_PATH, None), {'games': []})
+			with self.assertRaises(urllib.error.HTTPError) as e: urllib.request.urlopen(base + preview.BOARDS_PATH)
+			self.assertEqual(e.exception.code, 404)                  # no boards.json yet
+			for body, origin, code in ((b'{"x": 1}', 'http://elsewhere.example', 403), (b'{"x": 1}', None, 403), (b'not json', base, 400)):
+				with self.assertRaises(urllib.error.HTTPError) as e:
+					post(body, origin) if origin else urllib.request.urlopen(urllib.request.Request(base + preview.RECORD_PATH, data=body, method='POST'))
+				self.assertEqual(e.exception.code, code)
+			self.assertEqual(open(record).read(), '{"games": []}')
+			stop = lambda tok: urllib.request.urlopen(urllib.request.Request(base + preview.STOP_PATH, data=tok, method='POST'))
+			with self.assertRaises(urllib.error.HTTPError) as e: stop(b'wrong')
+			self.assertEqual(e.exception.code, 403)
+			self.assertEqual(stop(b'right').status, 204)
+			t.join(5)
+			self.assertFalse(t.is_alive())
+		finally:
+			if t.is_alive(): s.shutdown()
+			s.server_close()
+
+
 if __name__ == '__main__':
 	unittest.main(verbosity=1)
