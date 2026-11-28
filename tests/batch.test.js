@@ -11,6 +11,7 @@ const index = JSON.parse(readFileSync(new URL('index.json', dir), 'utf8'));
 const batches = index.batches.map(b => ({ ...b, data: JSON.parse(readFileSync(new URL(b.file, dir), 'utf8')) }));
 const ek = (a, b) => (a < b ? `${a}-${b}` : `${b}-${a}`);
 const NEVER = ['BRICHT', 'TRAF', 'GALT', 'EICH', 'ALTMARK'];
+// words the old lexicon lacked; the word list has DART and LEIN, so they may be targets now
 const BONUS = ['BRIE', 'DART', 'LEIN'];
 
 /** every path along the board's lines that spells w */
@@ -83,10 +84,10 @@ for (const b of batches) {
 		}
 	});
 
-	test(`${b.file}: BRICHT, TRAF, GALT, EICH, ALTMARK no target anywhere; BRIE, DART, LEIN bonus where traced`, () => {
+	test(`${b.file}: BRICHT, TRAF, GALT, EICH, ALTMARK no target anywhere; BRIE, DART, LEIN a word where traced`, () => {
 		for (const d of days) {
 			for (const w of NEVER) assert.ok(!d.targets[w], `${d.date}: ${w} is a target`);
-			for (const w of BONUS) if (tracePaths(d, w).length) assert.ok(d.bonus.includes(w), `${d.date}: ${w} traceable but no bonus word`);
+			for (const w of BONUS) if (tracePaths(d, w).length) assert.ok(d.bonus.includes(w) || d.targets[w], `${d.date}: ${w} traceable but no word`);
 		}
 	});
 
