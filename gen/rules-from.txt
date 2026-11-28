@@ -1,0 +1,4 @@
+# The first day the word rules are checked on (gen/check.py, tests/batch.test.js). Days before
+# it stay as played: only their dates, ids and index.json are checked. Move it to a new batch's
+# start when the generator or the word lists change in a way the boards before it would fail.
+2026-11-30

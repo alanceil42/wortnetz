@@ -99,6 +99,12 @@ class Targets(unittest.TestCase):
 		self.assertTrue(gen.bad('NAZI') and gen.bad('NAZIS'))
 		self.assertFalse('NAZI' in gen.LEX)
 
+	def test_bad_exact(self):
+		# disallow-exact.txt: the word only, where a prefix would take real words with it
+		self.assertFalse(os.path.exists(os.path.join(HERE, 'disallow-exact.txt')), 'it belongs in the data folder')
+		self.assertTrue(gen.bad('ASSI') and gen.bad('TÜRK'))
+		self.assertFalse(gen.bad('ASSISTENT') or gen.bad('TÜRKE') or gen.bad('FISTEL'))
+
 
 class WordList(unittest.TestCase):
 	# the Scrabble-style word list is the base (lexicon.py); wordfreq and Hunspell fill its gaps

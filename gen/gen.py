@@ -15,7 +15,8 @@
 #   theme words are targets even when rare; the group and its words are kept per board
 # - no headline twice and no pair of theme words twice across all batches in --out, not only
 #   within one; a new batch cuts the earlier batches at its start
-# - disallow.txt is read from the data folder (private), like the lexicon
+# - disallow.txt (prefix) and disallow-exact.txt (the word only) are read from the data folder
+#   (private), like the lexicon
 # - base forms: nouns.tsv (nouns.py, from Wiktionary) says which words
 #   are noun lemmas (AUGE, KATZE, MEINUNG) and which only plurals (GESETZE, HÜTE, THEMEN);
 #   Hunspell stores AUGE as Aug + e exactly like GESETZE as Gesetz + e
@@ -37,8 +38,9 @@
 # - each target carries what the page's expected time needs: z (Zipf) and fam (its stem's family)
 #
 # Data (--data, or WORTNETZ_DATA): lexicon.tsv (lexicon.py, from the word list `words`),
-# nounstems.txt, lowstems.txt, nouns.tsv (nouns.py), disallow.txt and the igerman98 dictionary in
-# package/ (npm pack dictionary-de@3.0.0). The other word lists and themes.txt are here in gen/.
+# nounstems.txt, lowstems.txt, nouns.tsv (nouns.py), disallow.txt, disallow-exact.txt and the
+# igerman98 dictionary in package/ (npm pack dictionary-de@3.0.0). The other word lists, themes.txt
+# and rules-from.txt (the first day the word rules hold for) are here in gen/.
 #
 # 0.3 (the fuller lexicon): the Scrabble-style word list is the base, so every inflected form it
 # has is a bonus word and its stray names go by Wiktionary's name rows; simple nouns of 4-9
@@ -60,7 +62,7 @@ EASY_PROBE = 250     # an easy board's pairing of headline and group is dropped 
 
 DATA = None
 LEX = {}             # WORD -> (zipf_de, zipf_en, kind, stem, flags)
-NAMES = STOP = BAD = NOUNS = LOWS = ALLOW = LEMMA = PLURAL = set()
+NAMES = STOP = BAD = EXACT = NOUNS = LOWS = ALLOW = LEMMA = PLURAL = set()
 TARGET = set(); PRE = set(); POOL = []; POOL_CUM = []; SEEDS = []; LONG = []
 THEMES = []          # (name, window or None, [usable words]); window = ('MM-DD', 'MM-DD')
 THEME = set()        # every usable theme word
@@ -74,8 +76,14 @@ def wordfile(path):
 		return set()
 
 
+def rules_from():
+	"""the first day the word rules hold for (rules-from.txt); days before it stay as played"""
+	with open(os.path.join(HERE, 'rules-from.txt'), encoding='utf-8') as f:
+		return next(l.strip() for l in f if l.strip() and not l.startswith('#'))
+
+
 def bad(w):
-	return any(w.startswith(b) for b in BAD)
+	return w in EXACT or any(w.startswith(b) for b in BAD)
 
 
 def namelike(w):
@@ -227,14 +235,15 @@ def family(w):
 
 def load(data):
 	"""the lexicon and the word lists; data is the folder with lexicon.tsv and friends"""
-	global DATA, NAMES, STOP, BAD, NOUNS, LOWS, ALLOW, LEMMA, PLURAL, TARGET, PRE, POOL, POOL_CUM, SEEDS, THEMES, THEME
+	global DATA, NAMES, STOP, BAD, EXACT, NOUNS, LOWS, ALLOW, LEMMA, PLURAL, TARGET, PRE, POOL, POOL_CUM, SEEDS, THEMES, THEME
 	DATA = data
-	for need in ('lexicon.tsv', 'nounstems.txt', 'lowstems.txt', 'nouns.tsv', 'disallow.txt'):
+	for need in ('lexicon.tsv', 'nounstems.txt', 'lowstems.txt', 'nouns.tsv', 'disallow.txt', 'disallow-exact.txt'):
 		if not os.path.exists(os.path.join(data, need)):
 			sys.exit(f'gen.py: {need} missing in {data} (--data)')
 	NAMES = wordfile(os.path.join(HERE, 'names.txt'))   # not a word at all
 	STOP = wordfile(os.path.join(HERE, 'bonusonly.txt'))     # a word, but no target (bonus only)
 	BAD = wordfile(os.path.join(data, 'disallow.txt'))       # vulgar or slur: no word, nor any word starting with it
+	EXACT = wordfile(os.path.join(data, 'disallow-exact.txt'))   # the same, this word only (ASSI, not ASSISTENT)
 	ALLOW = wordfile(os.path.join(HERE, 'allow.txt'))   # bonus words the lexicon lacks
 	NOUNS = wordfile(os.path.join(data, 'nounstems.txt'))
 	LOWS = wordfile(os.path.join(data, 'lowstems.txt'))
@@ -647,11 +656,13 @@ def bonus_words(letters, edges, targets, found=None):
 def rebonus(a):
 	"""every day of every generator 4 batch gets its bonus list by today's rules; the board, its
 	targets and its id stay. Refuses when a day's targets would change (that needs --redo).
-	Older batches stay as played."""
+	Older batches and days before rules-from.txt's date stay as played."""
+	start = rules_from()
 	for fn, batch in batches(a.out):
 		if batch.get('gen', '') < 'g4': continue
 		added = removed = days = 0
 		for d in batch['days']:
+			if d['date'] < start: continue
 			edges = {tuple(e) for e in d['edges']}
 			found = trace(d['letters'], edges)
 			t = set(d['targets'])
@@ -687,7 +698,7 @@ def redo(a, dates):
 			avoid.add(d['headline'])
 			if d.get('easy') and split_compound(d['headline']): avoid |= set(split_compound(d['headline'])[::2])
 			if d.get('theme'): pairs |= pairs_of(d['theme']['words'])
-	longs = [w for w, z in long_compounds(hunbonus.D) if len(w) <= 14]
+	longs = [w for w, z in long_compounds(hunbonus.D) if len(w) <= 12]   # the lexicon stops at 12 letters
 	for w, z in long_compounds(hunbonus.D): HEADZ[w] = z
 	groups = {g[0]: g for g in THEMES}
 	for i, d in enumerate(batch['days']):
@@ -790,7 +801,7 @@ def main():
 	easy = easy_days(a.days, rng)
 	names = [g[0] for g in THEMES]; rng.shuffle(names)
 	order = {n: i for i, n in enumerate(names)}
-	longs = [(w, z) for w, z in long_compounds(hunbonus.D) if len(w) <= 14]
+	longs = [(w, z) for w, z in long_compounds(hunbonus.D) if len(w) <= 12]   # the lexicon stops at 12 letters
 	for w, z in longs: HEADZ[w] = z
 	rng.shuffle(longs)
 	days, heads, spent = [], set(), set()
