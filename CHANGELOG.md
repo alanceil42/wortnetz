@@ -7,6 +7,7 @@ that are not released yet collect under "Unreleased".
 
 ## Unreleased
 
+- More plant and animal names count as bonus words (ZEDER among them).
 
 ## 0.2.9 - 2026-11-27
 
