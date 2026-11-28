@@ -9,6 +9,12 @@ wortnetz is a German version of Zanagrams, an English word game by PZL games
 The puzzles (puzzles/*.json) and the word lists in gen/ were made with these word data. Their
 words, word frequencies (the "z" values) and word forms come from them:
 
+German word list for word games (enz/german-wordlist)
+    Contributors of https://github.com/enz/german-wordlist (used by Tanglet)
+    Dedicated to the public domain under CC0 1.0 Universal
+    (https://creativecommons.org/publicdomain/zero/1.0/); credited here all the same. It says
+    which strings are German words, with all their inflected forms.
+
 wordfreq
     Robyn Speer and contributors, https://github.com/rspeer/wordfreq
     Its word lists are licensed under the Creative Commons Attribution-ShareAlike 4.0

@@ -73,14 +73,21 @@ class Targets(unittest.TestCase):
 		# bonus words, never targets (0.2.2): LIEG was rejected on 2026-11-22
 		for w in ('LIEG', 'BEKOMM', 'VERLIER', 'TRENN', 'LERN'):
 			self.assertTrue(w in gen.LEX and w not in gen.TARGET, w)
-		# GEB, NEHM: gib, nimm; ABHOL, ANGEH: separable; ÖFFN, RECHN: needs -e; MÖCHT, BRÄUCHT: no imperative
+		# GEB, NEHM: gib, nimm; ABHOL, ANGEH: separable; ÖFFN, RECHN: needs -e; MÖCHT, BRÄUCHT: no
+		# imperative. The rule makes none of them (the word list has some as spoken first persons)
+		imp = {x for x, stem in gen.short_imperatives()}
 		for w in ('NEHM', 'ABHOL', 'ANGEH', 'MITBRING', 'ÖFFN', 'RECHN', 'MÖCHT', 'BRÄUCHT', 'BITT'):
+			self.assertFalse(w in imp, w)
+		for w in ('ÖFFN', 'RECHN'):
 			self.assertFalse(w in gen.LEX, w)
 
 	def test_allow_list(self):
-		# found when traced, never targets: LIEK on 2026-11-22, sailing words with it
-		for w in ('LIEK', 'BRIE', 'GAFFEL', 'KLAMPE', 'FIEREN', 'SEEMEILE'):
+		# found when traced, never targets: sailing words the word list lacks
+		for w in ('BETING', 'VORSTAG', 'MEERRETTICH'):
 			self.assertTrue(w in gen.LEX and w not in gen.TARGET, w)
+		# LIEK (rejected on 2026-11-22) and its fellows are in the word list now
+		for w in ('LIEK', 'BRIE', 'GAFFEL', 'KLAMPE', 'FIEREN', 'SEEMEILE'):
+			self.assertTrue(w in gen.LEX, w)
 
 	def test_four_letter_bonus_only(self):
 		# 2026-11-22: GEIL, SOLI and others are words, never targets
@@ -91,6 +98,55 @@ class Targets(unittest.TestCase):
 		self.assertFalse(os.path.exists(os.path.join(HERE, 'disallow.txt')), 'disallow.txt belongs in the data folder')
 		self.assertTrue(gen.bad('NAZI') and gen.bad('NAZIS'))
 		self.assertFalse('NAZI' in gen.LEX)
+
+	def test_bad_exact(self):
+		# disallow-exact.txt: the word only, where a prefix would take real words with it
+		self.assertFalse(os.path.exists(os.path.join(HERE, 'disallow-exact.txt')), 'it belongs in the data folder')
+		self.assertTrue(gen.bad('ASSI') and gen.bad('TÜRK'))
+		self.assertFalse(gen.bad('ASSISTENT') or gen.bad('TÜRKE') or gen.bad('FISTEL'))
+
+
+class WordList(unittest.TestCase):
+	# the Scrabble-style word list is the base (lexicon.py); wordfreq and Hunspell fill its gaps
+	def test_words_hunspell_lacks(self):
+		# ZEDER was rejected on 2026-11-28: igerman98 lacks it; the word list has it
+		for w in ('ZEDER', 'MINZE', 'HUMMEL', 'REIHER', 'ILTIS', 'SCHLEHE'):
+			self.assertTrue(w in gen.LEX, w)
+
+	def test_rarer_simple_nouns(self):
+		# simple nouns down to NOUN_FLOOR; compounds and other words keep 3.0
+		for w in ('ZEDER', 'ILTIS', 'QUALLE', 'ERBSE'):
+			self.assertTrue(w in gen.TARGET, w)
+		self.assertLess(gen.LEX['ZEDER'][0], 3.0)
+
+	def test_names_the_list_lacks_or_holds(self):
+		# not in the list: no word (JAPAN, EUROPA, CHRISTIAN were targets of 0.2)
+		for w in ('JAPAN', 'EUROPA', 'CHRISTIAN', 'JOHANN'):
+			self.assertFalse(w in gen.LEX, w)
+		# in the list, but Wiktionary has them only as names
+		for w in ('LAURA', 'SEEHOFER', 'SOLINGEN'):
+			self.assertFalse(w in gen.LEX, w)
+
+	def test_gaps_of_the_list(self):
+		# the list lacks some verbs and attested compounds; the 0.2 lexicon's reading stays
+		for w in ('HINBEKOMMEN', 'APFELKUCHEN'):
+			self.assertTrue(w in gen.TARGET, w)
+
+	def test_inflections_from_the_list(self):
+		# every form is a word; targets stay base forms
+		for w in ('ZEDERN', 'SCHWÄCHST', 'BEKUNDE'):
+			self.assertTrue(w in gen.LEX and w not in gen.TARGET, w)
+
+	def test_pick_weight(self):
+		# off by default; on, common words weigh 1 and rare ones fade out
+		self.assertEqual(gen.pick_weight(1.0), 1.0)
+		sd, gen.PICK_SD = gen.PICK_SD, 0.4
+		try:
+			self.assertGreater(gen.pick_weight(4.0), 0.99)
+			self.assertAlmostEqual(gen.pick_weight(gen.PICK_MID), 0.5)
+			self.assertLess(gen.pick_weight(1.5), 0.01)
+		finally:
+			gen.PICK_SD = sd
 
 
 class Themes(unittest.TestCase):
