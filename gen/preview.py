@@ -31,6 +31,7 @@ HOME = os.path.join(tempfile.gettempdir(), 'wortnetz-preview')   # state.json, s
 SITE = ['index.html', 'app.css', 'icon.svg', 'manifest.json', 'config.json', 'sw.js', 'icons', 'src', 'vendor']
 STOP_PATH = '/.preview-stop'
 RECORD_PATH = '/.preview-record'
+BOARDS_PATH = '/.preview-boards'
 RECORD_MAX = 8 << 20
 RECORD_JS = """// preview only (gen/preview.py, never in the shipped page): sends the page's stored state to
 // the preview server when it changed, for Claude to read the games
@@ -178,6 +179,19 @@ def make_server(srv, port, token, record=None):
 			self.send_header('Cache-Control', 'no-cache')
 			super().end_headers()
 
+		def do_GET(self):
+			# the record and the boards, for --show from any shell (each may have its own temp
+			# folder); another site can't read them (no CORS header)
+			files = {RECORD_PATH: record, BOARDS_PATH: record and os.path.join(os.path.dirname(record), 'boards.json')}
+			if self.path in files:
+				try: body = open(files[self.path], 'rb').read()
+				except (OSError, TypeError): self.send_error(404); return
+				self.send_response(200)
+				self.send_header('Content-Type', 'application/json')
+				self.send_header('Content-Length', str(len(body)))
+				self.end_headers(); self.wfile.write(body); return
+			super().do_GET()
+
 		def do_POST(self):
 			n = int(self.headers.get('Content-Length') or 0)
 			if self.path == RECORD_PATH:
@@ -283,12 +297,21 @@ def mmss(ms):
 	return f'{s // 60}:{s % 60:02d}'
 
 
-def show(record, boards, n=1):
-	"""the last n games on preview boards, as text: each event with its active time"""
-	try: st = json.load(open(record, encoding='utf-8'))
-	except (OSError, ValueError): return 'no recording yet (open the preview page and play)'
-	try: known = json.load(open(boards, encoding='utf-8'))
-	except (OSError, ValueError): known = {}
+def fetch_json(port, path, file):
+	"""from the running server (it knows its own folder), else from file; None when neither"""
+	try:
+		with urllib.request.urlopen(f'http://127.0.0.1:{port}{path}', timeout=2) as r: return json.load(r)
+	except (urllib.error.URLError, OSError, ValueError):
+		pass
+	try: return json.load(open(file, encoding='utf-8'))
+	except (OSError, ValueError): return None
+
+
+def show(st, known, n=1):
+	"""the last n games on preview boards, as text: each event with its active time.
+	st: the page's stored state as recorded; known: remember()'s boards"""
+	if not st: return 'no recording yet (open the preview page and play)'
+	known = known or {}
 	games = list(st.get('games') or []) + [dict(g, current=True) for g in (st.get('current') or {}).values()]
 	games = [g for g in games if g.get('puzzle') in known]
 	games.sort(key=lambda g: g.get('startedAt') or '')
@@ -338,7 +361,8 @@ def main():
 		print('preview server stopped' if stop(a.port) else f'no preview server on port {a.port}')
 		return
 	if a.show is not None:
-		print(show(os.path.join(HOME, 'record.json'), os.path.join(HOME, 'boards.json'), a.show))
+		print(show(fetch_json(a.port, RECORD_PATH, os.path.join(HOME, 'record.json')),
+			fetch_json(a.port, BOARDS_PATH, os.path.join(HOME, 'boards.json')), a.show))
 		return
 	if not 1 <= a.days <= 30: sys.exit('preview.py: --days 1 to 30')
 	import gen, hunbonus

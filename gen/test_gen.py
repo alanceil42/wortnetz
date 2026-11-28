@@ -248,7 +248,7 @@ class Preview(unittest.TestCase):
 		json.dump({'games': [{'puzzle': 'b00000000000', 'events': []}, {'puzzle': d['id'], 'startedAt': '2027-03-02T10:00:00Z',
 			'events': [{'t': 0, 'ty': 'start'}, {'t': 4200, 'ty': 'word', 'w': w, 'res': 'target', 'path': [0, 1, 2, 3]},
 				{'t': 9000, 'ty': 'hint', 'w': w, 'k': 1}]}], 'current': {}}, open(record, 'w', encoding='utf-8'))
-		text = preview.show(record, boards)
+		text = preview.show(preview.fetch_json(1, preview.RECORD_PATH, record), preview.fetch_json(1, preview.BOARDS_PATH, boards))
 		self.assertTrue(text.startswith(f"2027-03-02 {d['id']}"), text)
 		self.assertIn(f'0:04  {w}', text)
 		self.assertIn('0:09  hint', text)
@@ -273,6 +273,11 @@ class Preview(unittest.TestCase):
 				data=body, method='POST', headers={'Origin': origin}))
 			self.assertEqual(post(b'{"games": []}', base).status, 204)
 			self.assertEqual(open(record).read(), '{"games": []}')
+			# read back through the server: --show works from a shell with another temp folder
+			port = s.server_address[1]
+			self.assertEqual(preview.fetch_json(port, preview.RECORD_PATH, None), {'games': []})
+			with self.assertRaises(urllib.error.HTTPError) as e: urllib.request.urlopen(base + preview.BOARDS_PATH)
+			self.assertEqual(e.exception.code, 404)                  # no boards.json yet
 			for body, origin, code in ((b'{"x": 1}', 'http://elsewhere.example', 403), (b'{"x": 1}', None, 403), (b'not json', base, 400)):
 				with self.assertRaises(urllib.error.HTTPError) as e:
 					post(body, origin) if origin else urllib.request.urlopen(urllib.request.Request(base + preview.RECORD_PATH, data=body, method='POST'))
