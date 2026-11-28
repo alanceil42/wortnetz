@@ -7,12 +7,16 @@ that are not released yet collect under "Unreleased".
 
 ## Unreleased
 
+## 0.3 - 2026-11-28
+
+A fuller word list and a new year of boards.
+
 - More plant and animal names count as bonus words (ZEDER among them).
 - A fuller word list: every inflected form of a Scrabble-style list counts as a bonus word, and
   rarer simple nouns (trees, birds, kitchen words) can be hidden words too; names that had
   slipped in are out.
-- New boards from 2026-11-30 to 2027-11-25, made with the fuller word list; people named after
-  a place or named after one are bonus words only.
+- New boards from 2026-11-30 to 2027-11-25, made with the fuller word list; people from a
+  place, and things named after one, are bonus words only.
 
 ## 0.2.9 - 2026-11-27
 
