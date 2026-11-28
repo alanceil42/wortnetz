@@ -69,7 +69,8 @@ To play a fresh board before it is in a batch (needs the word data, below):
 with a copy of the page into the system's temp folder and serves it in the background on
 <http://127.0.0.1:8003/wortnetz/>; a second run swaps in new boards, `--stop` ends the server.
 It only reads puzzles/: no real day's headline shows early, nothing there changes. As its one
-batch ends today, the page says new puzzles are coming.
+batch ends today, the page says new puzzles are coming. The copy (never the page itself) sends
+its stored games to the preview server; `--show [N]` prints the last N games word by word.
 
 ### A new batch of puzzles
 

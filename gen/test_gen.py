@@ -235,20 +235,49 @@ class Preview(unittest.TestCase):
 		self.assertIn("'$Format:%h$'", open(os.path.join(site, 'sw.js'), encoding='utf-8').read())
 		for f in ('index.html', 'src/ui/app.js', 'vendor/xxl-scorer/src/ui/debug.js', 'icons/icon-192.png'):
 			self.assertTrue(os.path.isfile(os.path.join(site, f)), f)
+		# the recorder: in the copy only, before the page's script; the repository's page has none
+		html = open(os.path.join(site, 'index.html'), encoding='utf-8').read()
+		self.assertIn('<script src="preview-record.js"></script>\n' + preview.APP_TAG, html)
+		self.assertIn(preview.RECORD_PATH, open(os.path.join(site, 'preview-record.js'), encoding='utf-8').read())
+		self.assertNotIn('preview-record', open(os.path.join(HERE, '..', 'index.html'), encoding='utf-8').read())
 		self.assertEqual(self.snapshot(), before)               # puzzles/ untouched
+		# --show: a recorded game on a preview board, word by word; games on other boards left out
+		boards = os.path.join(srv, 'boards.json'); record = os.path.join(srv, 'record.json')
+		preview.remember(boards, batch)
+		d = batch['days'][1]; w = sorted(d['targets'])[0]
+		json.dump({'games': [{'puzzle': 'b00000000000', 'events': []}, {'puzzle': d['id'], 'startedAt': '2027-03-02T10:00:00Z',
+			'events': [{'t': 0, 'ty': 'start'}, {'t': 4200, 'ty': 'word', 'w': w, 'res': 'target', 'path': [0, 1, 2, 3]},
+				{'t': 9000, 'ty': 'hint', 'w': w, 'k': 1}]}], 'current': {}}, open(record, 'w', encoding='utf-8'))
+		text = preview.show(record, boards)
+		self.assertTrue(text.startswith(f"2027-03-02 {d['id']}"), text)
+		self.assertIn(f'0:04  {w}', text)
+		self.assertIn('0:09  hint', text)
+		self.assertNotIn(f' {w} ', text.split('not found:')[1] + ' ')
+		self.assertNotIn('b00000000000', text)
 
 	def test_server(self):
 		import tempfile, threading, urllib.error, urllib.request, preview
 		srv = tempfile.mkdtemp()
 		os.makedirs(os.path.join(srv, 'wortnetz', 'src'))
 		open(os.path.join(srv, 'wortnetz', 'src', 'a.js'), 'w').write('export {};\n')
-		s = preview.make_server(srv, 0, 'right')
+		record = os.path.join(srv, 'record.json')
+		s = preview.make_server(srv, 0, 'right', record)
 		t = threading.Thread(target=s.serve_forever); t.start()
 		base = f'http://127.0.0.1:{s.server_address[1]}'
 		try:
 			with urllib.request.urlopen(base + '/wortnetz/src/a.js') as r:
 				self.assertEqual(r.headers['Content-Type'], 'text/javascript')   # module scripts need it
 				self.assertEqual(r.headers['Cache-Control'], 'no-cache')
+			# the record: only from the page's own origin, only JSON
+			post = lambda body, origin: urllib.request.urlopen(urllib.request.Request(base + preview.RECORD_PATH,
+				data=body, method='POST', headers={'Origin': origin}))
+			self.assertEqual(post(b'{"games": []}', base).status, 204)
+			self.assertEqual(open(record).read(), '{"games": []}')
+			for body, origin, code in ((b'{"x": 1}', 'http://elsewhere.example', 403), (b'{"x": 1}', None, 403), (b'not json', base, 400)):
+				with self.assertRaises(urllib.error.HTTPError) as e:
+					post(body, origin) if origin else urllib.request.urlopen(urllib.request.Request(base + preview.RECORD_PATH, data=body, method='POST'))
+				self.assertEqual(e.exception.code, code)
+			self.assertEqual(open(record).read(), '{"games": []}')
 			stop = lambda tok: urllib.request.urlopen(urllib.request.Request(base + preview.STOP_PATH, data=tok, method='POST'))
 			with self.assertRaises(urllib.error.HTTPError) as e: stop(b'wrong')
 			self.assertEqual(e.exception.code, 403)

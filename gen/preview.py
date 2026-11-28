@@ -13,7 +13,12 @@
 # and keeps that server. The port is fixed so the browser keeps the preview's storage (solves,
 # factor, settings) between runs, apart from the real site's. The checkout isn't archived, so its
 # service worker runs as "dev" (network first): a new board shows at the next reload.
-import argparse, datetime, json, os, random, secrets, shutil, sys, tempfile, threading, time
+#
+# Recording, as the prototype did: the copy (only the copy) gets a small script that sends the
+# page's stored state to the preview server whenever it changes; the server keeps the latest in
+# record.json beside srv/. `--show [N]` prints the last N games on preview boards, word by word.
+#	python3 gen/preview.py --show [N]
+import argparse, datetime, hashlib, json, os, random, secrets, shutil, sys, tempfile, threading, time
 import urllib.error, urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
@@ -25,6 +30,25 @@ PORT = 8003
 HOME = os.path.join(tempfile.gettempdir(), 'wortnetz-preview')   # state.json, server.log, srv/
 SITE = ['index.html', 'app.css', 'icon.svg', 'manifest.json', 'config.json', 'sw.js', 'icons', 'src', 'vendor']
 STOP_PATH = '/.preview-stop'
+RECORD_PATH = '/.preview-record'
+RECORD_MAX = 8 << 20
+RECORD_JS = """// preview only (gen/preview.py, never in the shipped page): sends the page's stored state to
+// the preview server when it changed, for Claude to read the games
+(() => {
+	let last = '';
+	const send = () => {
+		let s;
+		try { s = localStorage.getItem('wortnetz.state') || ''; } catch { return; }
+		if (!s || s === last) return;
+		last = s;
+		fetch('%s', { method: 'POST', body: s, keepalive: s.length < 60000 }).catch(() => { last = ''; });
+	};
+	setInterval(send, 3000);
+	addEventListener('pagehide', send);
+	document.addEventListener('visibilitychange', () => { if (document.hidden) send(); });
+})();
+""" % RECORD_PATH
+APP_TAG = '<script type="module" src="src/ui/app.js"></script>'
 
 
 def berlin_today():
@@ -119,6 +143,12 @@ def write_site(srv, batch):
 		src = os.path.join(ROOT, name)
 		if os.path.isdir(src): shutil.copytree(src, os.path.join(new, name))
 		else: shutil.copy2(src, os.path.join(new, name))
+	# the recorder, before the page's own script (same origin: the page's CSP lets it in)
+	page = os.path.join(new, 'index.html')
+	html = open(page, encoding='utf-8').read()
+	if html.count(APP_TAG) != 1: sys.exit(f'preview.py: index.html has no single {APP_TAG}')
+	with open(page, 'w', encoding='utf-8') as f: f.write(html.replace(APP_TAG, '<script src="preview-record.js"></script>\n' + APP_TAG))
+	with open(os.path.join(new, 'preview-record.js'), 'w', encoding='utf-8') as f: f.write(RECORD_JS)
 	fn = f"batch-{batch['start']}.json"
 	with open(os.path.join(new, 'puzzles', fn), 'w', encoding='utf-8') as f:
 		json.dump(batch, f, ensure_ascii=False, separators=(',', ':'))
@@ -133,9 +163,10 @@ def write_site(srv, batch):
 
 # ---------- the server ----------
 
-def make_server(srv, port, token):
+def make_server(srv, port, token, record=None):
 	"""a static server for srv on 127.0.0.1:port (0: any free port); a POST to STOP_PATH with the
-	token ends it (a later run can't signal the process: the sandbox keeps processes apart)"""
+	token ends it (a later run can't signal the process: the sandbox keeps processes apart); a
+	POST to RECORD_PATH from the page itself is written to record (a file path)"""
 	class Handler(SimpleHTTPRequestHandler):
 		extensions_map = {**SimpleHTTPRequestHandler.extensions_map, '.js': 'text/javascript',
 			'.mjs': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml'}
@@ -148,7 +179,20 @@ def make_server(srv, port, token):
 			super().end_headers()
 
 		def do_POST(self):
-			body = self.rfile.read(min(int(self.headers.get('Content-Length') or 0), 200)).decode('ascii', 'replace')
+			n = int(self.headers.get('Content-Length') or 0)
+			if self.path == RECORD_PATH:
+				# only the preview page (another site could post here too): its own origin, a sane size
+				p = self.server.server_address[1]
+				if not record or self.headers.get('Origin') not in (f'http://127.0.0.1:{p}', f'http://localhost:{p}') \
+						or not 0 < n <= RECORD_MAX:
+					self.send_error(403); return
+				body = self.rfile.read(n)
+				try: json.loads(body)
+				except ValueError: self.send_error(400); return
+				with open(record + '.part', 'wb') as f: f.write(body)
+				os.replace(record + '.part', record)
+				self.send_response(204); self.end_headers(); return
+			body = self.rfile.read(min(n, 200)).decode('ascii', 'replace')
 			if self.path != STOP_PATH or not secrets.compare_digest(body, token):
 				self.send_error(403); return
 			self.send_response(204); self.end_headers()
@@ -193,12 +237,15 @@ def stop(port):
 def serve_background(port):
 	"""our server on port, started in the background unless it already runs"""
 	st = load_state()
-	if st and st.get('port') == port and up(port): return 'kept'
+	code = hashlib.sha1(open(os.path.abspath(__file__), 'rb').read()).hexdigest()
+	if st and st.get('port') == port and up(port):
+		if st.get('code') == code: return 'kept'
+		stop(port)                                   # a server from an older preview.py: a new one
 	if up(port) or busy(port):
 		sys.exit(f'preview.py: port {port} is taken by another server (--port, or --stop first)')
 	token = secrets.token_hex(16)
 	with open(os.path.join(HOME, 'state.json'), 'w', encoding='utf-8') as f:
-		json.dump({'port': port, 'token': token}, f)
+		json.dump({'port': port, 'token': token, 'code': code}, f)
 	import subprocess
 	log = open(os.path.join(HOME, 'server.log'), 'ab')
 	subprocess.Popen([sys.executable, os.path.abspath(__file__), '--serve', '--port', str(port)],
@@ -212,8 +259,62 @@ def serve_background(port):
 def busy(port):
 	import socket
 	with socket.socket() as s:
+		# as the server binds: closed connections of a stopped server (TIME_WAIT) don't count
+		s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		try: s.bind(('127.0.0.1', port)); return False
 		except OSError: return True
+
+
+# ---------- reading the recorded games ----------
+
+def remember(path, batch):
+	"""every preview board so far, by id: what --show needs to read a game on it"""
+	try: boards = json.load(open(path, encoding='utf-8'))
+	except (OSError, ValueError): boards = {}
+	for d in batch['days']:
+		boards[d['id']] = {'date': d['date'], 'seed': batch['seed'], 'headline': d['headline'], 'easy': d['easy'],
+			'theme': d['theme'], 'targets': sorted(d['targets']), 'bonus': len(d['bonus'])}
+	with open(path + '.part', 'w', encoding='utf-8') as f: json.dump(boards, f, ensure_ascii=False)
+	os.replace(path + '.part', path)
+
+
+def mmss(ms):
+	s = round((ms or 0) / 1000)
+	return f'{s // 60}:{s % 60:02d}'
+
+
+def show(record, boards, n=1):
+	"""the last n games on preview boards, as text: each event with its active time"""
+	try: st = json.load(open(record, encoding='utf-8'))
+	except (OSError, ValueError): return 'no recording yet (open the preview page and play)'
+	try: known = json.load(open(boards, encoding='utf-8'))
+	except (OSError, ValueError): known = {}
+	games = list(st.get('games') or []) + [dict(g, current=True) for g in (st.get('current') or {}).values()]
+	games = [g for g in games if g.get('puzzle') in known]
+	games.sort(key=lambda g: g.get('startedAt') or '')
+	if not games: return 'no game on a preview board recorded yet'
+	out = []
+	for g in games[-n:]:
+		b = known[g['puzzle']]; ev = g.get('events') or []
+		found = [e['w'] for e in ev if e.get('ty') == 'word' and e.get('res') == 'target']
+		state = 'running' if g.get('current') else 'solved' if g.get('solved') else 'left'
+		out.append(f"{b['date']} {g['puzzle']}{' easy' if b['easy'] else ''}, {state}"
+			+ (f", time {mmss(g.get('final'))} (active {mmss(g.get('active'))})" if g.get('solved') else '')
+			+ (', a replay' if g.get('replay') else '')
+			+ f"; headline {b['headline']}, theme {b['theme']['group']}: {' '.join(b['theme']['words'])}, "
+			f"{len(b['targets'])} targets, {b['bonus']} bonus")
+		for e in ev:
+			ty = e.get('ty'); t = mmss(e.get('t'))
+			if ty == 'word':
+				how = ('tap' if e.get('tap') else 'trace') + (f", {e['backs']} back" if e.get('backs') else '')
+				out.append(f"  {t}  {e.get('w', ''):<16} {e.get('res', '')}  ({how}, {len(e.get('path') or [])} letters)")
+			elif ty == 'hint': out.append(f"  {t}  hint: {e.get('w')} letter {e.get('k')}")
+			elif ty == 'pause': out.append(f"  {t}  pause ({e.get('why', '')})")
+			elif ty == 'solve': out.append(f"  {t}  solved")
+			else: out.append(f"  {t}  {ty}")
+		left = [w for w in b['targets'] if w not in found]
+		if left: out.append(f"  not found: {' '.join(left)}")
+	return '\n'.join(out)
 
 
 def main():
@@ -224,14 +325,20 @@ def main():
 	ap.add_argument('--port', type=int, default=PORT)
 	ap.add_argument('--data', default=os.environ.get('WORTNETZ_DATA', os.path.join(ROOT, '..', 'wortnetz-private', 'gen')))
 	ap.add_argument('--stop', action='store_true', help='end the preview server')
+	ap.add_argument('--show', type=int, nargs='?', const=1, help='the last N recorded games on preview boards (default 1)')
 	ap.add_argument('--serve', action='store_true', help=argparse.SUPPRESS)   # the server itself
 	a = ap.parse_args()
+	global HOME
+	if a.port != PORT: HOME = f'{HOME}-{a.port}'     # another port, another preview beside it
 	if a.serve:
 		st = load_state()
-		make_server(os.path.join(HOME, 'srv'), a.port, st['token']).serve_forever()
+		make_server(os.path.join(HOME, 'srv'), a.port, st['token'], os.path.join(HOME, 'record.json')).serve_forever()
 		return
 	if a.stop:
 		print('preview server stopped' if stop(a.port) else f'no preview server on port {a.port}')
+		return
+	if a.show is not None:
+		print(show(os.path.join(HOME, 'record.json'), os.path.join(HOME, 'boards.json'), a.show))
 		return
 	if not 1 <= a.days <= 30: sys.exit('preview.py: --days 1 to 30')
 	import gen, hunbonus
@@ -242,8 +349,10 @@ def main():
 	batch = make_batch(a.days, seed, os.path.join(ROOT, 'puzzles'), a.easy, log=lambda s: print(s, flush=True))
 	os.makedirs(HOME, exist_ok=True)
 	write_site(os.path.join(HOME, 'srv'), batch)
+	remember(os.path.join(HOME, 'boards.json'), batch)
 	how = serve_background(a.port)
-	print(f'server {how}: http://127.0.0.1:{a.port}/wortnetz/  (python3 gen/preview.py --stop ends it)')
+	port = '' if a.port == PORT else f' --port {a.port}'
+	print(f'server {how}: http://127.0.0.1:{a.port}/wortnetz/  (python3 gen/preview.py{port} --stop ends it)')
 
 
 if __name__ == '__main__':
