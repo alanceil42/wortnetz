@@ -36,10 +36,15 @@
 # - allow.txt: bonus words the lexicon lacks (BRIE, DART, LEIN), never targets
 # - each target carries what the page's expected time needs: z (Zipf) and fam (its stem's family)
 #
-# Data (--data, or WORTNETZ_DATA): lexicon.tsv (lexicon.py), nounstems.txt, lowstems.txt,
-# nouns.tsv (nouns.py), disallow.txt and the igerman98 dictionary in package/ (npm pack
-# dictionary-de@3.0.0). The other word lists and themes.txt are here in gen/.
-import argparse, datetime, hashlib, itertools, json, os, random, re, sys, time
+# Data (--data, or WORTNETZ_DATA): lexicon.tsv (lexicon.py, from the word list `words`),
+# nounstems.txt, lowstems.txt, nouns.tsv (nouns.py), disallow.txt and the igerman98 dictionary in
+# package/ (npm pack dictionary-de@3.0.0). The other word lists and themes.txt are here in gen/.
+#
+# 0.3 (the fuller lexicon): the Scrabble-style word list is the base, so every inflected form it
+# has is a bonus word and its stray names go by Wiktionary's name rows; simple nouns of 4-9
+# letters may be targets down to NOUN_FLOOR; fill words picked uniformly, or weighted by Zipf
+# (PICK_MID, PICK_SD: off by default); a compound splits without a link first
+import argparse, datetime, hashlib, itertools, json, math, os, random, re, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MAX_TRIES = int(os.environ.get('MAX_TRIES', 1000))  # board attempts per board (no wall time: a seed always gives the same board)
@@ -48,12 +53,15 @@ N = 4
 GEN = 'g4'
 MIN_GAP = 28         # days before a theme group comes back (a seasonal one: SEASON_GAP)
 SEASON_GAP = 6
+NOUN_FLOOR = 2.0     # the Zipf a simple noun target needs (other targets: 3.0)
+PICK_MID = float(os.environ.get('PICK_MID', 2.5))   # fill picks: rare words fade out around here
+PICK_SD = float(os.environ.get('PICK_SD', 0))       # ... over this width; 0: every pool word alike (the default)
 EASY_PROBE = 250     # an easy board's pairing of headline and group is dropped if these tries keep none
 
 DATA = None
 LEX = {}             # WORD -> (zipf_de, zipf_en, kind, stem, flags)
 NAMES = STOP = BAD = NOUNS = LOWS = ALLOW = LEMMA = PLURAL = set()
-TARGET = set(); PRE = set(); POOL = []; SEEDS = []; LONG = []
+TARGET = set(); PRE = set(); POOL = []; POOL_CUM = []; SEEDS = []; LONG = []
 THEMES = []          # (name, window or None, [usable words]); window = ('MM-DD', 'MM-DD')
 THEME = set()        # every usable theme word
 
@@ -168,15 +176,15 @@ def plural(w):
 	return any(s != w and s in NOUNS and s in LEX and LEX[s][2] == 'base' for s in sing)
 
 
-def why_not_target(w, hand=False):
+def why_not_target(w, hand=False, floor=3.0):
 	"""None when w may be a target; hand: a word picked by hand (a theme word), which
-	may be rare or an English loan"""
+	may be rare or an English loan; floor: the Zipf a target needs (4 letters: 0.3 more)"""
 	z, ze, kind, stem, flags = LEX[w]
 	if w in ALLOW and kind == 'allow': return 'allow'
 	if kind == 'imp': return 'imperative'
 	if w in STOP: return 'stop'
 	if namelike(w) and ze >= 3.0 and w not in LEMMA: return 'name?'
-	if not hand and z < 3.0 + (0.3 if len(w) == 4 else 0): return 'rare'
+	if not hand and z < floor + (0.3 if len(w) == 4 else 0): return 'rare'
 	if not hand and ze - z >= 1.0: return 'english'
 	if verbform(w): return 'verbform'
 	if imperative(w): return 'imperative'
@@ -219,7 +227,7 @@ def family(w):
 
 def load(data):
 	"""the lexicon and the word lists; data is the folder with lexicon.tsv and friends"""
-	global DATA, NAMES, STOP, BAD, NOUNS, LOWS, ALLOW, LEMMA, PLURAL, TARGET, PRE, POOL, SEEDS, THEMES, THEME
+	global DATA, NAMES, STOP, BAD, NOUNS, LOWS, ALLOW, LEMMA, PLURAL, TARGET, PRE, POOL, POOL_CUM, SEEDS, THEMES, THEME
 	DATA = data
 	for need in ('lexicon.tsv', 'nounstems.txt', 'lowstems.txt', 'nouns.tsv', 'disallow.txt'):
 		if not os.path.exists(os.path.join(data, need)):
@@ -238,9 +246,21 @@ def load(data):
 	LEX.clear()
 	with open(os.path.join(data, 'lexicon.tsv'), encoding='utf-8') as f:
 		for line in f:
-			w, z, ze, kind, stem, flags = line.rstrip('\n').split('\t')
+			cols = line.rstrip('\n').split('\t')
+			if len(cols) != 7: sys.exit('gen.py: lexicon.tsv is from before the word list (run gen/lexicon.py)')
+			w, z, ze, kind, stem, flags, src = cols
 			if kind == 'name' or len(w) > 16 or w in NAMES or bad(w): continue
 			if kind == 'comp' and w in wnames: continue          # DARMSTADT, BODENSEE: a name, no word
+			if src == 'h':
+				# not in the word list: kept where the list has a gap, not where it left out a name.
+				# A free compound or a noun only as Wiktionary's (APFELKUCHEN; not BACHMANN, JAPAN,
+				# CHRISTIAN), a verb, adjective or adverb as Hunspell's (HINBEKOMMEN, IRGENDWOHER)
+				if (kind == 'comp' or stem[:1].isupper()) and w not in LEMMA and w not in PLURAL: continue
+			# the word list still holds names (LAURA, SEEHOFER, SOLINGEN) and their genitives
+			if kind == 'enz' and w not in LEMMA and w not in PLURAL and (w in wnames or
+				(w.endswith('S') and w[:-1] in wnames)): continue
+			if kind == 'enz' and w in LEMMA:
+				kind = 'base'                                     # ZEDER, MINZE: a noun Hunspell lacks
 			# BERLINS, PRAGER (a name and its -er), but FREUDE (Freud + e) is a noun
 			if up(stem) in NAMES and (w not in LEMMA or w == up(stem) + 'ER'): continue
 			LEX[w] = (float(z), float(ze), kind, stem, flags)
@@ -248,6 +268,11 @@ def load(data):
 		if w not in LEX and not bad(w): LEX[w] = (0.0, 0.0, 'allow', w.capitalize(), '')
 	for x, stem in short_imperatives(): LEX[x] = (0.0, 0.0, 'imp', stem, '')
 	TARGET = {w for w in LEX if why_not_target(w) is None and form_ok(w)}
+	# rarer nouns (ZEDER, ILTIS, SCHLEHE): a written corpus under-counts concrete words, so a
+	# simple noun of 4-9 letters may go down to NOUN_FLOOR; a compound of two targets may not
+	# (a rare compound is a head scratcher). Split against the common targets only.
+	TARGET |= {w for w in LEX if w not in TARGET and w in LEMMA and len(w) <= 9
+		and why_not_target(w, floor=NOUN_FLOOR) is None and form_ok(w) and split_compound(w) is None}
 	THEMES, THEME = [], set()
 	for name, window, words in themes_file(os.path.join(HERE, 'themes.txt')):
 		ok = [w for w in words if theme_ok(w)]
@@ -255,6 +280,7 @@ def load(data):
 	TARGET |= THEME
 	PRE = {w[:i] for w in LEX for i in range(1, len(w))}
 	POOL = sorted(w for w in TARGET if 4 <= len(w) <= 9)
+	POOL_CUM = list(itertools.accumulate(pick_weight(LEX[w][0] if w in LEX else 0.0) for w in POOL))
 	SEEDS = sorted(w for w in POOL if 7 <= len(w) <= 9 and LEX[w][0] >= 3.3)
 
 
@@ -291,14 +317,19 @@ LINKS = ('', 'S', 'N', 'EN', 'ES', 'E', 'ER')
 
 
 def split_compound(w):
-	"""(first, link, head) when w is first + link + head, both parts targets of 4+ letters"""
+	"""(first, link, head) when w is first + link + head, both parts targets of 4+ letters; of
+	several splits the one without a link, then the longer first part (KLEIN + GEWERBE, not the
+	rarer KLEI + N + GEWERBE)"""
+	best = None
 	for i in range(4, len(w) - 3):
 		a = w[:i]
+		if a not in TARGET: continue
 		for link in LINKS:
 			b = w[i + len(link):] if w[i:i + len(link)] == link else None
-			if b and len(b) >= 4 and a in TARGET and b in TARGET and b in NOUNS:
-				return a, link, b
-	return None
+			if b and len(b) >= 4 and b in TARGET and b in NOUNS:
+				k = (-len(link), len(a))
+				if not best or k > best[0]: best = (k, (a, link, b))
+	return best[1] if best else None
 
 
 def umlaut_plural(b):
@@ -378,6 +409,18 @@ def placements(word, letters, edges, need_reuse, rng):
 	return res
 
 
+def pick_weight(z):
+	"""how likely a pool word is picked to fill a board, by its Zipf: the normal distribution's
+	cumulative function, so common words all weigh 1 and the rare end fades out"""
+	if PICK_SD <= 0: return 1.0
+	return 0.5 * (1 + math.erf((z - PICK_MID) / (PICK_SD * math.sqrt(2))))
+
+
+def fill_pick(rng):
+	"""a pool word to fill a board with, weighted by pick_weight"""
+	return rng.choices(POOL, cum_weights=POOL_CUM)[0]
+
+
 def build(rng, seed):
 	letters = [None] * (N * N); edges = set(); placed = []
 	p = placements(seed, letters, edges, False, rng)
@@ -388,7 +431,7 @@ def build(rng, seed):
 	tries = 0
 	while None in letters and tries < 3000:
 		tries += 1
-		w = rng.choice(POOL)
+		w = fill_pick(rng)
 		if w in placed: continue
 		p = [x for x in placements(w, letters, edges, True, rng) if x[1] >= 1]
 		if not p: continue
@@ -483,7 +526,7 @@ def themed_build(rng, words, pairs, headline=None):
 	tries = 0
 	while None in letters and tries < 3000:
 		tries += 1
-		w = rng.choice(POOL)
+		w = fill_pick(rng)
 		if w in placed: continue
 		if place(w, letters, edges, rng): placed.append(w)
 	if None in letters: return None

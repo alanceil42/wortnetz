@@ -8,6 +8,9 @@ that are not released yet collect under "Unreleased".
 ## Unreleased
 
 - More plant and animal names count as bonus words (ZEDER among them).
+- A fuller word list: every inflected form of a Scrabble-style list counts as a bonus word, and
+  rarer simple nouns (trees, birds, kitchen words) can be hidden words too; names that had
+  slipped in are out.
 
 ## 0.2.9 - 2026-11-27
 

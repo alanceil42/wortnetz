@@ -32,9 +32,10 @@ def fail(msg):
 
 # allow.txt: found when traced, a bonus word, never a target; a board of their own shows it,
 # since a batch may never trace them
-letters = list('BRIEDARTLEINXXXX')
-found = gen.trace(letters, {(0, 1), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7), (8, 9), (9, 10), (10, 11)})
-for w in ('BRIE', 'DART', 'LEIN'):
+letters = list('BETINGVORSTAGXXX')
+found = gen.trace(letters, {(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (6, 7), (7, 8), (8, 9), (9, 10),
+	(10, 11), (11, 12)})
+for w in ('BETING', 'VORSTAG'):
 	if w not in found or w in gen.TARGET:
 		fail(f'allow list: {w} is not a bonus word')
 

@@ -89,12 +89,14 @@ tests/static.test.js). The one link out, to the original game in "So geht's", is
 
 ## The generator (gen/)
 
-The lexicon (gen/lexicon.py) is wordfreq's German list checked against the igerman98 Hunspell
-dictionary: each word with its frequency, its stem and whether it is a base form, an inflection,
-a compound or a name. A word may be a **target** when it is common enough, not English more than
-German, and a base form: no verb forms, imperatives, participles, zu-infinitives or plurals
-(Wiktionary's nouns tell a plural from a singular that looks like one). names.txt and the
-private never-list keep words out entirely; bonusonly.txt keeps a word a bonus word only.
+The lexicon (gen/lexicon.py) is a Scrabble-style word list (every inflected form, no names),
+each word with its wordfreq frequency and, from the igerman98 Hunspell dictionary, its stem and
+whether it is a base form, an inflection, a compound or a name; wordfreq and Hunspell fill the
+list's gaps (attested compounds, some verbs). A word may be a **target** when it is common
+enough (Zipf 3.0; a simple noun down to 2.0), not English more than German, and a base form: no
+verb forms, imperatives, participles, zu-infinitives or plurals (Wiktionary's nouns tell a plural
+from a singular that looks like one, and its names keep the list's stray names out). names.txt
+and the private never-list keep words out entirely; bonusonly.txt keeps a word a bonus word only.
 
 A board starts from a theme group and a seed word, then places more words where they reuse
 letters, until all 16 cells are full. Then every word the lines allow is traced; targets and

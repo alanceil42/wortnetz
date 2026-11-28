@@ -67,11 +67,14 @@ To look at it locally: `npm run serve`, then <http://localhost:8002/>.
 ### A new batch of puzzles
 
 The generator needs word data that isn't in this repository: a lexicon built by gen/lexicon.py
-from wordfreq and the igerman98 dictionary, Wiktionary's nouns (gen/nouns.py), and a list of
-words that are never allowed (slurs and vulgar words), kept out on purpose. It reads them from
-the folder given by `--data` or `WORTNETZ_DATA`.
+from the word list of enz/german-wordlist (its file `words`), wordfreq and the igerman98
+dictionary, Wiktionary's nouns (gen/nouns.py), and a list of words that are never allowed (slurs
+and vulgar words), kept out on purpose. It reads them from the folder given by `--data` or
+`WORTNETZ_DATA`.
 
     pip install wordfreq spylls
+    python3 gen/nouns.py
+    python3 gen/lexicon.py <data>/package/index <data>/words <data>/lexicon.tsv
     python3 gen/gen.py --days 365 --start <the day after the last one>
     python3 gen/words.py puzzles/batch-<start>.json     # read every word before it ships
     python3 gen/check.py                                # every batch against today's lists
@@ -83,8 +86,8 @@ board). After a fix to a list, `gen.py --redo DAY,...` makes new boards for thos
 ## Licence
 
 GNU General Public License, version 3 only (LICENSE). The word data the puzzles are made from
-comes with its own terms, listed in NOTICE: wordfreq (CC BY-SA 4.0), the igerman98 dictionary
-(GPL 2 or 3), Wiktionary (CC BY-SA 4.0). Icons: Lucide (ISC). The files in vendor/xxl-scorer/:
-MIT.
+comes with its own terms, listed in NOTICE: the German word list of enz/german-wordlist (CC0),
+wordfreq (CC BY-SA 4.0), the igerman98 dictionary (GPL 2 or 3), Wiktionary (CC BY-SA 4.0).
+Icons: Lucide (ISC). The files in vendor/xxl-scorer/: MIT.
 
 Copyright 2026 alanceil42 and contributors.
