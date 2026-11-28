@@ -198,5 +198,67 @@ class Seeds(unittest.TestCase):
 		self.assertEqual(len({d['headline'] for d in after}), 3)
 
 
+class Preview(unittest.TestCase):
+	"""gen/preview.py: fresh boards apart from puzzles/, a site copy, the server"""
+	PUZZLES = os.path.join(HERE, '..', 'puzzles')
+
+	def snapshot(self):
+		import hashlib
+		return {fn: hashlib.sha1(open(os.path.join(self.PUZZLES, fn), 'rb').read()).hexdigest()
+			for fn in sorted(os.listdir(self.PUZZLES))}
+
+	def test_boards_and_site(self):
+		import datetime, json, tempfile, hunbonus, preview
+		hunbonus.init(os.path.join(DATA, 'package', 'index'), gen)
+		before = self.snapshot()
+		tries, gen.MAX_TRIES = gen.MAX_TRIES, 150
+		try:
+			today = datetime.date(2027, 3, 2)
+			batch = preview.make_batch(2, 7, self.PUZZLES, today=today, log=lambda s: None)
+			again = preview.make_batch(2, 7, self.PUZZLES, today=today, log=lambda s: None)
+		finally:
+			gen.MAX_TRIES = tries
+		self.assertEqual([d['date'] for d in batch['days']], ['2027-03-01', '2027-03-02'])
+		self.assertEqual([d['id'] for d in batch['days']], [d['id'] for d in again['days']])   # a seed, the same boards
+		avoid, pairs = preview.used(self.PUZZLES)
+		for d in batch['days']:
+			self.assertNotIn(d['headline'], avoid)             # no real day's headline shown early
+			self.assertFalse(gen.pairs_of(d['theme']['words']) & pairs)
+		srv = tempfile.mkdtemp()
+		site = preview.write_site(srv, batch)
+		site = preview.write_site(srv, batch)                  # a second run replaces the first
+		self.assertEqual(sorted(os.listdir(srv)), ['wortnetz'])
+		idx = json.load(open(os.path.join(site, 'puzzles', 'index.json'), encoding='utf-8'))
+		self.assertEqual(idx['batches'], [{'file': 'batch-2027-03-01.json', 'start': '2027-03-01', 'days': 2}])
+		self.assertEqual(sorted(os.listdir(os.path.join(site, 'puzzles'))), ['batch-2027-03-01.json', 'index.json'])
+		# not archived: the worker runs as "dev", network first, so a new board shows on reload
+		self.assertIn("'$Format:%h$'", open(os.path.join(site, 'sw.js'), encoding='utf-8').read())
+		for f in ('index.html', 'src/ui/app.js', 'vendor/xxl-scorer/src/ui/debug.js', 'icons/icon-192.png'):
+			self.assertTrue(os.path.isfile(os.path.join(site, f)), f)
+		self.assertEqual(self.snapshot(), before)               # puzzles/ untouched
+
+	def test_server(self):
+		import tempfile, threading, urllib.error, urllib.request, preview
+		srv = tempfile.mkdtemp()
+		os.makedirs(os.path.join(srv, 'wortnetz', 'src'))
+		open(os.path.join(srv, 'wortnetz', 'src', 'a.js'), 'w').write('export {};\n')
+		s = preview.make_server(srv, 0, 'right')
+		t = threading.Thread(target=s.serve_forever); t.start()
+		base = f'http://127.0.0.1:{s.server_address[1]}'
+		try:
+			with urllib.request.urlopen(base + '/wortnetz/src/a.js') as r:
+				self.assertEqual(r.headers['Content-Type'], 'text/javascript')   # module scripts need it
+				self.assertEqual(r.headers['Cache-Control'], 'no-cache')
+			stop = lambda tok: urllib.request.urlopen(urllib.request.Request(base + preview.STOP_PATH, data=tok, method='POST'))
+			with self.assertRaises(urllib.error.HTTPError) as e: stop(b'wrong')
+			self.assertEqual(e.exception.code, 403)
+			self.assertEqual(stop(b'right').status, 204)
+			t.join(5)
+			self.assertFalse(t.is_alive())
+		finally:
+			if t.is_alive(): s.shutdown()
+			s.server_close()
+
+
 if __name__ == '__main__':
 	unittest.main(verbosity=1)

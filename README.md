@@ -64,6 +64,13 @@ are made in advance by a Python generator and shipped as JSON, a year at a time.
 
 To look at it locally: `npm run serve`, then <http://localhost:8002/>.
 
+To play a fresh board before it is in a batch (needs the word data, below):
+`python3 gen/preview.py [--days N] [--easy]` makes new boards, the last one today's, puts them
+with a copy of the page into the system's temp folder and serves it in the background on
+<http://127.0.0.1:8003/wortnetz/>; a second run swaps in new boards, `--stop` ends the server.
+It only reads puzzles/: no real day's headline shows early, nothing there changes. As its one
+batch ends today, the page says new puzzles are coming.
+
 ### A new batch of puzzles
 
 The generator needs word data that isn't in this repository: a lexicon built by gen/lexicon.py
